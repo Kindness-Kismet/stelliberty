@@ -174,7 +174,7 @@ public sealed partial class App : Avalonia.Application
             ISubscriptionProviderUploader subscriptionProviderUploader = new FileSubscriptionProviderUploader(platformDirectories.CoreDirectory);
             ISubscriptionFileOpener subscriptionFileOpener = new DesktopSubscriptionFileOpener(subscriptionStore.GetContentPath);
             IOverrideFileOpener overrideFileOpener = new DesktopOverrideFileOpener(overrideStore.GetContentPath);
-            var clipboardWriter = new DesktopClipboardWriter(desktop);
+            var clipboardWriter = new DesktopClipboardWriter();
             var chainProxyContextLoader = new SubscriptionChainProxyContextLoader(subscriptionStore, new HubOverrideEngine(), overrideStore);
             var subscriptionPage = new SubscriptionPageViewModel(
                 subscriptionDeleter,
@@ -367,6 +367,7 @@ public sealed partial class App : Avalonia.Application
             {
                 DataContext = viewModel
             };
+            clipboardWriter.Attach(mainWindow);
             mainWindow.PrepareShutdownAsync = async () =>
             {
                 StopBackgroundServices();
