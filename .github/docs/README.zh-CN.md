@@ -330,6 +330,8 @@ Pull Request 必须以 `beta` 为目标分支，禁止直接向 `stable` 发起�
 
 界面指令封装在 `src/Stelliberty.Desktop/Debug`，通过仅在界面进程运行时存在的调试端口调用；托盘生命周期指令封装在 `src/Stelliberty.Tray/Debug`，通过进程通信调用。修改时同步维护本地 app-debug 技能，使用 `tray.*` 指令观察后台状态、打开界面或验证界面崩溃恢复。
 
+本地技能还提供 `tray.copy-terminal`，用于验证界面关闭后的剪贴板操作；此指令要求核心已运行，失败时返回错误。两套本地技能均不纳入 Git 追踪。
+
 ### 控件 ID 要求
 
 新增可点击、可输入、可选择、可断言状态的控件时：

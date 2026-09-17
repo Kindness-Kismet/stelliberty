@@ -101,7 +101,7 @@ internal sealed class TrayRequestRouter : IDisposable
                     request,
                     cancellationToken).ConfigureAwait(false),
 #if DEBUG
-                TrayProtocol.CopyTerminalProxyMethod => await HandleCopyTerminalProxyAsync().ConfigureAwait(false),
+                TrayProtocol.CopyTerminalProxyMethod => await HandleCopyTerminalProxyAsync(cancellationToken).ConfigureAwait(false),
                 TrayProtocol.HotkeySimulateMethod => await HandleHotkeySimulationAsync(
                     request,
                     cancellationToken).ConfigureAwait(false),
@@ -273,10 +273,17 @@ internal sealed class TrayRequestRouter : IDisposable
     }
 
 #if DEBUG
-    private async Task<TrayIpcResult> HandleCopyTerminalProxyAsync()
+    private async Task<TrayIpcResult> HandleCopyTerminalProxyAsync(CancellationToken cancellationToken)
     {
-        await _hotkeys.CopyTerminalProxyAsync().ConfigureAwait(false);
-        return TrayIpcResult.Success(new { });
+        try
+        {
+            await _hotkeys.CopyTerminalProxyAsync(cancellationToken).ConfigureAwait(false);
+            return TrayIpcResult.Success(new { });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return TrayIpcResult.Error("tray.copy_failed", exception.Message);
+        }
     }
 #endif
 

@@ -15,14 +15,15 @@ internal static class Program
 
     internal static bool ActivateUiOnStart { get; private set; }
 
+    // 同步入口才能让 STAThread 作用于宿主线程，Windows 剪贴板依赖其 COM 初始化。
     [STAThread]
-    public static async Task<int> Main(string[] args)
+    public static int Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
 #if DEBUG
         if (args is ["--debug-command", var command])
         {
-            return await DebugTrayCommands.ExecuteAsync(command).ConfigureAwait(false);
+            return DebugTrayCommands.ExecuteAsync(command).GetAwaiter().GetResult();
         }
 #endif
         AppLogger.Configure(new CapturedAppLogger(TrayApplicationLayout.RunningLogFilePath));
@@ -31,7 +32,7 @@ internal static class Program
         using var singleInstance = new TraySingleInstance();
         if (!singleInstance.OwnsInstance)
         {
-            return await ActivateExistingInstanceAsync().ConfigureAwait(false);
+            return ActivateExistingInstanceAsync().GetAwaiter().GetResult();
         }
 
         if (!args.Contains("--show-ui", StringComparer.Ordinal))

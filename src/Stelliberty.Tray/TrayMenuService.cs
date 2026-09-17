@@ -27,7 +27,7 @@ internal interface ITrayHotkeyRuntime
     Task ReleaseSuppressionAsync(Guid connectionId);
 
 #if DEBUG
-    Task CopyTerminalProxyAsync();
+    Task CopyTerminalProxyAsync(CancellationToken cancellationToken);
 
     Task<bool> SimulateActivationAsync(GlobalHotkeyAction action, CancellationToken cancellationToken);
 #endif
@@ -246,29 +246,30 @@ internal sealed class TrayMenuService(
         _ = CopyTerminalProxyAsync(TrayTerminalShell.Bash);
 
 #if DEBUG
-    public Task CopyTerminalProxyAsync() => CopyTerminalProxyAsync(
-        OperatingSystem.IsWindows() ? TrayTerminalShell.PowerShell : TrayTerminalShell.Bash);
+    public Task CopyTerminalProxyAsync(CancellationToken cancellationToken) => WriteTerminalProxyAsync(
+        OperatingSystem.IsWindows() ? TrayTerminalShell.PowerShell : TrayTerminalShell.Bash,
+        cancellationToken);
 #endif
 
-    private Task CopyTerminalProxyAsync(TrayTerminalShell shell)
-    {
-        return ExecuteAsync("copy terminal proxy", async token =>
-        {
-            if (!IsCoreRunning())
-            {
-                return;
-            }
+    private Task CopyTerminalProxyAsync(TrayTerminalShell shell) =>
+        ExecuteAsync("copy terminal proxy", token => WriteTerminalProxyAsync(shell, token));
 
-            var settings = _settingsStore.Load();
-            var url = $"http://{settings.ProxyHost}:{settings.MixedPort}";
-            var command = shell switch
-            {
-                TrayTerminalShell.PowerShell => $"$env:http_proxy=\"{url}\"; $env:https_proxy=\"{url}\"",
-                TrayTerminalShell.Cmd => $"set http_proxy={url} && set https_proxy={url}",
-                _ => $"export http_proxy={url} && export https_proxy={url}",
-            };
-            await _clipboard.WriteTextAsync(command, token).ConfigureAwait(false);
-        });
+    private async Task WriteTerminalProxyAsync(TrayTerminalShell shell, CancellationToken cancellationToken)
+    {
+        if (!IsCoreRunning())
+        {
+            throw new InvalidOperationException("Core is not running; terminal proxy command was not copied.");
+        }
+
+        var settings = _settingsStore.Load();
+        var url = $"http://{settings.ProxyHost}:{settings.MixedPort}";
+        var command = shell switch
+        {
+            TrayTerminalShell.PowerShell => $"$env:http_proxy=\"{url}\"; $env:https_proxy=\"{url}\"",
+            TrayTerminalShell.Cmd => $"set http_proxy={url} && set https_proxy={url}",
+            _ => $"export http_proxy={url} && export https_proxy={url}",
+        };
+        await _clipboard.WriteTextAsync(command, cancellationToken).ConfigureAwait(false);
     }
 
     private void OnOutboundRuleClicked(object? sender, EventArgs args) =>

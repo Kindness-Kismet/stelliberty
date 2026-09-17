@@ -324,6 +324,8 @@ Pull Requests must target `beta`. Direct Pull Requests to `stable` are prohibite
 
 UI commands are wrapped under `src/Stelliberty.Desktop/Debug` and invoked through the debug control port, which exists only while the UI process is running. Tray lifecycle commands live under `src/Stelliberty.Tray/Debug` and use IPC. Keep the local app-debug skill in sync with the affected host; use its `tray.*` commands to inspect background state, open the UI, or verify UI crash recovery.
 
+The local skill also provides `tray.copy-terminal` to verify clipboard access while the UI is closed. It requires a running core and reports failures to the caller. Both local skill copies remain outside Git tracking.
+
 ### Control ID Requirements
 
 When adding clickable, input-capable, selectable, or state-assertable controls:
