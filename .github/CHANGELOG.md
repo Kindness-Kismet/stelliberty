@@ -1,7 +1,13 @@
-- Fixed an issue with copying terminal proxy commands from the tray that previously caused copying to fail while the main window stayed hidden after silent startup
-- Fixed an issue with service-mode core status that previously caused false error reports during system shutdown or sign-out
+- Added Lightweight Mode, so you can now free the interface from memory when hiding to the tray and reload it when reopened
+- Added the Mips Stack option, so you can now select it in Virtual Network settings
+- Fixed an issue with the Copy Terminal Proxy tray command that previously failed on Windows
+- Improved the node delay test button, which now offers a larger hit area and is easier to click
+- Removed the service mode session switch failure messages; installing or uninstalling service mode no longer reports intermediate failures
 
 ---
 
-- 修复了关于托盘复制终端代理命令的错误，该问题曾导致静默启动后主窗口隐藏时无法复制命令
-- 修复了关于服务模式核心状态的错误，该问题曾导致系统关机或注销期间状态误报异常
+- 新增了轻量模式，现在可以在隐藏到托盘时释放界面内存，再次打开时重新加载
+- 新增了 Mips 网络栈选项，现在可以在虚拟网卡配置中选择
+- 修复了关于托盘“复制终端指令”的错误，该问题曾导致在 Windows 上复制失败
+- 对节点延迟检测按钮进行了改善，现在可点击区域更大，更容易点击
+- 移除了服务模式会话切换失败的提示，安装或卸载服务模式不再报告中间失败
