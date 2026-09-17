@@ -133,7 +133,7 @@ public sealed record RuntimeConfigParams
 
     private static string NormalizeTunStack(string value)
     {
-        return string.IsNullOrWhiteSpace(value) ? Default.TunStack : value.ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(value) ? Default.TunStack : value.Trim().ToLowerInvariant();
     }
 
     // 设置可能被手动编辑，白名单外的值回退为 Rule。

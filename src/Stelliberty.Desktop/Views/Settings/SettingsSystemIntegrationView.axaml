@@ -97,9 +97,12 @@
       <Border Classes="settings-inline-row">
         <Grid ColumnDefinitions="*,180">
           <TextBlock Grid.Column="0" Classes="settings-row-title" Text="{Binding CoreConfig.SystemTunStackText}" />
-          <TextBox Grid.Column="1" Classes="settings-input"
-                   AutomationProperties.AutomationId="Settings.TunStackBox"
-                   Text="{Binding CoreConfig.TunStack, Mode=TwoWay}" />
+          <ComboBox Grid.Column="1"
+                    AutomationProperties.AutomationId="Settings.TunStackComboBox"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    ItemsSource="{Binding CoreConfig.TunStackOptions}"
+                    SelectedItem="{Binding CoreConfig.SelectedTunStack, Mode=TwoWay}" />
         </Grid>
       </Border>
       <Border Classes="settings-row-divider" />

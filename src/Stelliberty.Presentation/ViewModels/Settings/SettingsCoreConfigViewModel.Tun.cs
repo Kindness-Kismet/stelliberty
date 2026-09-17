@@ -17,6 +17,21 @@ public sealed partial class SettingsCoreConfigViewModel
     public string SystemTunMtuText => _localization.GetString("Settings.System.TunMtu");
     public string SystemTunMtuDescriptionText => _localization.GetString("Settings.System.TunMtuDescription");
 
+    public IReadOnlyList<string> TunStackOptions { get; } = ["Mixed", "System", "gVisor", "Mips"];
+
+    public string? SelectedTunStack
+    {
+        // 协议栈匹配遵循核心不区分大小写的规则。
+        get => TunStackOptions.FirstOrDefault(option => string.Equals(option, _settings.TunStack.Trim(), StringComparison.OrdinalIgnoreCase));
+        set
+        {
+            if (value is not null)
+            {
+                TunStack = value;
+            }
+        }
+    }
+
     public bool IsTunEnabled
     {
         get => _settings.IsTunEnabled;
@@ -26,7 +41,13 @@ public sealed partial class SettingsCoreConfigViewModel
     public string TunStack
     {
         get => _settings.TunStack;
-        set => SetWithArea(_settings.TunStack, value, next => _settings.TunStack = next, "Tun");
+        set
+        {
+            if (SetTrimmedStringWithArea(_settings.TunStack, value, next => _settings.TunStack = next, "Tun"))
+            {
+                OnPropertyChanged(nameof(SelectedTunStack));
+            }
+        }
     }
 
     public string TunDevice
