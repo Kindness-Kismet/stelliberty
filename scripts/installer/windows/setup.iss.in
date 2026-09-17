@@ -4,6 +4,7 @@
 #define MyAppVersion "@APP_VERSION@"
 #define MyAppPublisher "@APP_PUBLISHER@"
 #define MyAppExeName "@APP_EXE_NAME@"
+#define MyAppUiExeName "@APP_UI_EXE_NAME@"
 #define MyAppPackageName "@APP_PACKAGE_NAME@"
 #define MyAppMutex "@APP_MUTEX@"
 #define MyServiceName "@SERVICE_NAME@"
@@ -250,16 +251,18 @@ end;
 
 procedure StopAppProcessIfNeeded();
 var
-  ProcessPath: String;
+  AppProcessPath: String;
+  UiProcessPath: String;
   ScriptPath: String;
   Script: String;
 begin
-  ProcessPath := ExpandConstant('{app}\{#MyAppExeName}');
+  AppProcessPath := ExpandConstant('{app}\{#MyAppExeName}');
+  UiProcessPath := ExpandConstant('{app}\{#MyAppUiExeName}');
   ScriptPath := ExpandConstant('{tmp}\stop-stelliberty-app.ps1');
   Script :=
-    '$processPath = "' + ProcessPath + '"' + #13#10 +
-    'Get-CimInstance Win32_Process -Filter "Name = ''{#MyAppExeName}''" |' + #13#10 +
-    '  Where-Object { $_.ExecutablePath -eq $processPath } |' + #13#10 +
+    '$processPaths = @("' + AppProcessPath + '", "' + UiProcessPath + '")' + #13#10 +
+    'Get-CimInstance Win32_Process |' + #13#10 +
+    '  Where-Object { $processPaths -contains $_.ExecutablePath } |' + #13#10 +
     '  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }';
   SaveStringToFile(ScriptPath, Script, False);
   RunHidden(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),

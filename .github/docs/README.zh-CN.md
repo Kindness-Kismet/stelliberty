@@ -139,23 +139,28 @@ Windows 上的 UWP 应用（如微软商店应用）默认禁止访问本地代�
 
 ### 架构
 
-采用模块化单体 + Clean Architecture + MVVM。
+采用模块化分层 + Clean Architecture + MVVM，托盘和界面分别运行在独立宿主进程中。
 
 ```
-src/Stelliberty.Desktop         Avalonia 宿主、窗口、平台服务
+src/Stelliberty.Tray            常驻托盘宿主、核心生命周期、后台任务
+src/Stelliberty.Desktop         按需启动的 Avalonia 界面宿主、窗口、界面平台服务
 src/Stelliberty.Presentation    ViewModel、UI 状态、命令绑定
 src/Stelliberty.Application     用例、服务与平台能力接口
 src/Stelliberty.Domain          实体、值对象、领域规则
-src/Stelliberty.Infrastructure  文件系统、持久化、外部服务
+src/Stelliberty.Infrastructure  文件系统、持久化、外部服务、进程通信传输与客户端
 src/Stelliberty.Native          C# 到原生 FFI 层的包装
 native/hub                      原生库：配置覆写、解析、能力模块
 native/service                  服务模式
 scripts/                        build.py · prebuild.py · test.py
 ```
 
-依赖方向：`Desktop → Presentation → Application → Domain`
+依赖方向：`Desktop → Presentation → Application → Domain`，以及 `Tray → Application → Domain`。
 
 `Infrastructure` 和 `Native` 实现 `Application` 定义的接口；`Application` 不依赖桌面、Avalonia 或 FFI 细节。
+
+公共入口 `stelliberty.exe` 负责托盘、核心运行、系统代理、服务模式、全局快捷键与后台调度，需要窗口时通过授权会话启动 `data/deps/stelliberty_ui.exe`。其他桌面平台使用对应的无扩展名程序入口。
+
+重复打开窗口时复用当前界面会话；关闭到托盘时退出界面进程，界面退出或崩溃后后台继续运行，完整退出由托盘统一清理。自启动、安装和提权重启均指向托盘入口，`scripts/build.py` 统一构建并打包两个宿主。
 
 禁止：
 
@@ -316,14 +321,14 @@ Pull Request 必须以 `beta` 为目标分支，禁止直接向 `stable` 发起�
 
 | 检查项 | 说明 |
 |---|---|
-| 调试指令 | 新增或修改业务逻辑时，必须在 `src/Stelliberty.Desktop/Debug` 封装对应的调试指令 |
+| 调试指令 | 界面指令维护在 `src/Stelliberty.Desktop/Debug`，托盘生命周期指令维护在 `src/Stelliberty.Tray/Debug` |
 | 控件 ID | 引入新的可交互控件时，必须设置 `AutomationProperties.AutomationId` |
 | 测试覆盖 | 纯业务逻辑使用编译前测试，安装包应用行为使用编译后测试 |
 | 格式化 | C# 运行 `dotnet format`，Rust 运行 `cargo fmt` |
 
 ### 调试指令要求
 
-调试指令封装在 `src/Stelliberty.Desktop/Debug`，通过调试控制端口调用；新增或修改业务逻辑时，应在对应的 `Debug/Commands/*.cs` 中实现。
+界面指令封装在 `src/Stelliberty.Desktop/Debug`，通过仅在界面进程运行时存在的调试端口调用；托盘生命周期指令封装在 `src/Stelliberty.Tray/Debug`，通过进程通信调用。修改时同步维护本地 app-debug 技能，使用 `tray.*` 指令观察后台状态、打开界面或验证界面崩溃恢复。
 
 ### 控件 ID 要求
 

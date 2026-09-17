@@ -23,25 +23,25 @@
   <Window.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
-        <ResourceInclude Source="avares://stelliberty/Styles/Theme.axaml" />
+        <ResourceInclude Source="avares://stelliberty_ui/Styles/Theme.axaml" />
       </ResourceDictionary.MergedDictionaries>
       <views:PageToViewConverter x:Key="PageToView" />
     </ResourceDictionary>
   </Window.Resources>
 
   <Window.Styles>
-    <StyleInclude Source="avares://stelliberty/Styles/ShellStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/PrimitivesStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/ScrollStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/ListPageStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/HomeStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/ProxyStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/ComboBoxStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/MenuStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/SwitchStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/DialogStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/ToastStyles.axaml" />
-    <StyleInclude Source="avares://stelliberty/Styles/SettingsStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/ShellStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/PrimitivesStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/ScrollStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/ListPageStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/HomeStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/ProxyStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/ComboBoxStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/MenuStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/SwitchStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/DialogStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/ToastStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty_ui/Styles/SettingsStyles.axaml" />
   </Window.Styles>
 
   <Grid RowDefinitions="36,*">

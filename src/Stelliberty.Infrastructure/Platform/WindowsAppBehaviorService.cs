@@ -12,14 +12,17 @@ public sealed class WindowsAppBehaviorService : IAppBehaviorService
 {
     private static readonly TimeSpan SchtasksTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ElevatedSchtasksTimeout = TimeSpan.FromMinutes(2);
+    private readonly string _binaryPath;
+
+    public WindowsAppBehaviorService(string binaryPath) => _binaryPath = binaryPath;
 
     public void Apply(AppBehaviorApplicationRequest request)
     {
-        ApplyAutoStart(request.IsAutoStartEnabled);
+        ApplyAutoStart(request.IsAutoStartEnabled, request.IsSilentStartEnabled);
         AppLogger.Info($"Windows app behavior applied: autoStart={request.IsAutoStartEnabled}");
     }
 
-    private static void ApplyAutoStart(bool isEnabled)
+    private void ApplyAutoStart(bool isEnabled, bool isSilentStartEnabled)
     {
         if (!isEnabled)
         {
@@ -31,20 +34,13 @@ public sealed class WindowsAppBehaviorService : IAppBehaviorService
             return;
         }
 
-        var binaryPath = Environment.ProcessPath ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(binaryPath))
-        {
-            AppLogger.Warning("Windows autostart path is empty");
-            return;
-        }
-
-        if (!RegisterScheduledTask(binaryPath))
+        if (!RegisterScheduledTask(_binaryPath, isSilentStartEnabled))
         {
             throw new InvalidOperationException("Windows autostart scheduled task registration failed.");
         }
     }
 
-    private static bool RegisterScheduledTask(string binaryPath)
+    private static bool RegisterScheduledTask(string binaryPath, bool isSilentStartEnabled)
     {
         var xmlPath = Path.Combine(
             Path.GetTempPath(),
@@ -53,7 +49,10 @@ public sealed class WindowsAppBehaviorService : IAppBehaviorService
         {
             File.WriteAllText(
                 xmlPath,
-                AutoStartEntryBuilder.WindowsScheduledTaskXml(binaryPath, CurrentUserSid()),
+                AutoStartEntryBuilder.WindowsScheduledTaskXml(
+                    binaryPath,
+                    CurrentUserSid(),
+                    isSilentStartEnabled),
                 Encoding.Unicode);
             var result = RunSchtasks(
                 ["/create", "/tn", AutoStartEntryBuilder.WindowsTaskName, "/xml", xmlPath, "/f"],

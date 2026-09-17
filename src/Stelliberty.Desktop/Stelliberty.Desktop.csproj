@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <AssemblyName>$(AppName)</AssemblyName>
+    <AssemblyName>$(AppName)_ui</AssemblyName>
     <Version>$(AppVersion)</Version>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <HotAvaloniaAutoEnable>false</HotAvaloniaAutoEnable>
@@ -9,7 +9,6 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
-    <OutputType>Exe</OutputType>
     <HotAvaloniaMode>Aggressive</HotAvaloniaMode>
   </PropertyGroup>
 

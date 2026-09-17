@@ -3,7 +3,7 @@
     <ProjectReference Include="..\Stelliberty.Application\Stelliberty.Application.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="$(AppName)" />
+    <InternalsVisibleTo Include="$(AppName)_ui" />
     <InternalsVisibleTo Include="Stelliberty.Tests" />
   </ItemGroup>
   <ItemGroup>

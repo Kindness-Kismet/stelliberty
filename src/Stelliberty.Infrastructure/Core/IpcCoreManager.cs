@@ -7,7 +7,7 @@ using Stelliberty.Application.Runtime;
 
 namespace Stelliberty.Infrastructure.Core;
 
-public sealed class IpcCoreManager : ICoreManager, IDisposable, IAsyncDisposable
+public sealed class IpcCoreManager : IReadyCoreManager, IDisposable, IAsyncDisposable
 {
     private readonly JsonRpcPipeClient _client;
     private readonly CoreLogParser _coreLogParser = new();

@@ -27,32 +27,26 @@ namespace Stelliberty.Desktop;
 
 public sealed partial class MainWindow : Window
 {
-    // 短暂隐藏保留页面，长期驻留托盘后再回收视觉树。
-    private static readonly TimeSpan HiddenPageReleaseDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PageLoadingMinVisible = TimeSpan.FromMilliseconds(300);
     private readonly WindowAppearanceService _windowAppearanceService = new();
     private readonly WindowStateService _windowStateService;
     private readonly SystemAccentColorService _systemAccentColorService = new();
     private readonly BitmapCache _proxyPageBitmapCache = new() { SnapsToDevicePixels = true };
     private readonly Dictionary<AppNavigationPage, ContentControl> _pageHosts = new();
-    private readonly Dictionary<AppNavigationPage, Dictionary<string, Vector>> _pageScrollOffsets = new();
-    private IReadOnlyDictionary<SettingsSubPage, Vector> _settingsScrollOffsets = new Dictionary<SettingsSubPage, Vector>();
-    private readonly DispatcherTimer _hiddenPageReleaseTimer;
     private bool _pageHostsReady;
-    private bool _pageViewsReleasedWhileHidden;
     private ContentControl? _visiblePageHost;
     private ContentControl? _pendingPageHost;
     private MainWindowViewModel? _attachedViewModel;
     private AccentColorPickerView? _activeAccentPicker;
     private bool _isShutdownRequested;
     private bool _isShutdownPreparing;
+    private bool _shouldShutdownTray = true;
     private bool _hasOpened;
     private long _pageTransitionVersion;
     private long _pageLoadingShownAt;
 #if DEBUG
     private long _navigationDebugVersion;
     private long _hotReloadRecoveryVersion;
-    private long _hiddenMemoryBeforeRelease;
 #endif
 
     public MainWindow()
@@ -63,8 +57,6 @@ public sealed partial class MainWindow : Window
     public MainWindow(IAppSettingsStore? settingsStore, AppSettings? settings)
     {
         _windowStateService = new WindowStateService(settingsStore, settings);
-        _hiddenPageReleaseTimer = new DispatcherTimer { Interval = HiddenPageReleaseDelay };
-        _hiddenPageReleaseTimer.Tick += OnHiddenPageReleaseTimerTick;
         InitializeComponent();
         ApplyPlatformWindowDecorations();
         DataContextChanged += OnDataContextChanged;
@@ -278,7 +270,6 @@ public sealed partial class MainWindow : Window
 
         EnsurePageLoaded(page);
         host.IsVisible = true;
-        PreparePageLayout(page, host);
         ShowPageHost(host);
         _visiblePageHost = host;
         ActivatePageHost(host);
@@ -313,7 +304,6 @@ public sealed partial class MainWindow : Window
             // 缓存页已有视觉树，直接启动过渡，避免等待空闲合成器唤醒。
             PrepareNextHostEnterState(nextHost);
             ActivatePageHost(nextHost);
-            PreparePageLayout(page, nextHost);
             StartPageTransition(previousHost, nextHost, version);
             return;
         }
@@ -341,7 +331,6 @@ public sealed partial class MainWindow : Window
                 EnsurePageLoaded(page);
                 PrepareNextHostEnterState(nextHost);
                 ActivatePageHost(nextHost);
-                PreparePageLayout(page, nextHost);
                 CompletePageLoadingThenEnter(previousHost, nextHost, version);
             },
             DispatcherPriority.Background);
@@ -724,12 +713,23 @@ public sealed partial class MainWindow : Window
 
     public void RequestShutdown()
     {
+        BeginShutdown(shouldShutdownTray: true);
+    }
+
+    internal void RequestUiShutdown()
+    {
+        BeginShutdown(shouldShutdownTray: false);
+    }
+
+    private void BeginShutdown(bool shouldShutdownTray)
+    {
         if (_isShutdownRequested || _isShutdownPreparing)
         {
             return;
         }
 
-        AppLogger.Info("Application exit requested");
+        _shouldShutdownTray = shouldShutdownTray;
+        AppLogger.Info(shouldShutdownTray ? "Application exit requested" : "Desktop UI exit requested");
         _isShutdownPreparing = true;
         _ = PrepareAndShutdownAsync();
     }
@@ -739,6 +739,10 @@ public sealed partial class MainWindow : Window
     internal Action? OsShutdownDetected { private get; set; }
 
     internal bool IsShutdownPreparing => _isShutdownPreparing;
+
+    internal bool ShouldShutdownTray => _shouldShutdownTray;
+
+    internal bool CanExitToBackground { get; set; }
 
     protected override void OnClosing(WindowClosingEventArgs args)
     {
@@ -754,11 +758,10 @@ public sealed partial class MainWindow : Window
         if (!_isShutdownRequested)
         {
             args.Cancel = true;
-            if (DataContext is MainWindowViewModel { AppBehavior.IsMinimizeToTrayEnabled: true })
+            if (DataContext is MainWindowViewModel { AppBehavior.IsMinimizeToTrayEnabled: true }
+                && CanExitToBackground)
             {
-                ClearTitleBarHoverState();
-                // 先取消关闭按钮红色效果，等界面更新两次再隐藏，避免恢复窗口时闪红。
-                RequestAnimationFrame(OnTitleBarStateClearedFrame);
+                RequestUiShutdown();
             }
             else
             {
@@ -772,7 +775,8 @@ public sealed partial class MainWindow : Window
 
     private async Task PrepareAndShutdownAsync()
     {
-        AppLogger.Info("Application exit preparation started");
+        var scope = _shouldShutdownTray ? "Application" : "Desktop UI";
+        AppLogger.Info($"{scope} exit preparation started");
         try
         {
             if (PrepareShutdownAsync is not null)
@@ -785,7 +789,7 @@ public sealed partial class MainWindow : Window
             AppLogger.Warning($"Application exit preparation failed: {exception.Message}");
         }
 
-        AppLogger.Info("Application exit preparation completed");
+        AppLogger.Info($"{scope} exit preparation completed");
         var desktop = Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
         var requiresExplicitShutdown = desktop?.ShutdownMode == ShutdownMode.OnExplicitShutdown;
         _isShutdownRequested = true;
@@ -800,9 +804,6 @@ public sealed partial class MainWindow : Window
     {
         SetPageLoadingVisible(false);
         CancelPendingPageTransition();
-        _hiddenPageReleaseTimer.Stop();
-        _hiddenPageReleaseTimer.Tick -= OnHiddenPageReleaseTimerTick;
-        _pageViewsReleasedWhileHidden = false;
         CloseAccentPicker();
         _visiblePageHost = null;
         ClearPageHostContents();
@@ -837,211 +838,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void CapturePageScrollOffsets()
-    {
-        _pageScrollOffsets.Clear();
-        foreach (var (page, host) in _pageHosts)
-        {
-            if (page == AppNavigationPage.Settings || host.Content is not Control content)
-            {
-                continue;
-            }
-
-            var offsets = content.GetVisualDescendants()
-                .OfType<ScrollViewer>()
-                .Select(scrollViewer => (Id: AutomationProperties.GetAutomationId(scrollViewer), scrollViewer.Offset))
-                .Where(item => !string.IsNullOrWhiteSpace(item.Id) && (item.Offset.X > 0 || item.Offset.Y > 0))
-                .ToDictionary(item => item.Id!, item => item.Offset, StringComparer.Ordinal);
-            if (offsets.Count > 0)
-            {
-                _pageScrollOffsets[page] = offsets;
-            }
-        }
-
-        if (_pageHosts.TryGetValue(AppNavigationPage.Settings, out var settingsHost)
-            && settingsHost.Content is SettingsView settingsView)
-        {
-            _settingsScrollOffsets = settingsView.CaptureScrollOffsets();
-        }
-    }
-
-    private void PreparePageLayout(AppNavigationPage page, ContentControl host)
-    {
-        if (page == AppNavigationPage.Settings && host.Content is SettingsView settingsView)
-        {
-            if (_settingsScrollOffsets.Count == 0)
-            {
-                return;
-            }
-
-            host.UpdateLayout();
-            settingsView.RestoreScrollOffsets(_settingsScrollOffsets);
-            return;
-        }
-
-        if (!_pageScrollOffsets.Remove(page, out var offsets)
-            || host.Content is not Control content)
-        {
-            return;
-        }
-
-        host.UpdateLayout();
-        var restoredCount = 0;
-        var maxVerticalOffset = 0d;
-        foreach (var scrollViewer in content.GetVisualDescendants().OfType<ScrollViewer>())
-        {
-            var automationId = AutomationProperties.GetAutomationId(scrollViewer);
-            if (automationId is null || !offsets.TryGetValue(automationId, out var offset))
-            {
-                continue;
-            }
-
-            scrollViewer.Offset = offset;
-            restoredCount++;
-            maxVerticalOffset = Math.Max(maxVerticalOffset, offset.Y);
-        }
-
-        if (restoredCount == 0)
-        {
-            return;
-        }
-
-        host.UpdateLayout();
-#if DEBUG
-        AppLogger.Info($"[StartupTrace] Page scroll restored page={page} viewers={restoredCount} max_y={maxVerticalOffset:0.0}");
-#endif
-    }
-
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs args)
     {
         if (args.Property == WindowStateProperty)
         {
             UpdateWindowStateVisuals();
         }
-
-        if (args.Property != Visual.IsVisibleProperty)
-        {
-            return;
-        }
-
-        if (IsVisible)
-        {
-            _hiddenPageReleaseTimer.Stop();
-            var pageViewsWereReleased = _pageViewsReleasedWhileHidden;
-            RestoreReleasedPageViews();
-            if (!pageViewsWereReleased && _visiblePageHost is not null)
-            {
-                ActivatePageHost(_visiblePageHost);
-            }
-        }
-        else if (!_isShutdownRequested)
-        {
-            SetPageLoadingVisible(false);
-            CancelPendingPageTransition();
-            DeactivatePageHost(_visiblePageHost);
-            ScheduleHiddenMemoryRelease();
-        }
-    }
-
-    internal void ScheduleHiddenMemoryRelease()
-    {
-        if (IsVisible || _isShutdownRequested)
-        {
-            return;
-        }
-
-        _hiddenPageReleaseTimer.Stop();
-        _hiddenPageReleaseTimer.Start();
-    }
-
-    private void OnHiddenPageReleaseTimerTick(object? sender, EventArgs args)
-    {
-        _hiddenPageReleaseTimer.Stop();
-        if (IsVisible || _isShutdownRequested)
-        {
-            return;
-        }
-
-#if DEBUG
-        _hiddenMemoryBeforeRelease = GetPrivateMemorySize();
-#endif
-        CapturePageScrollOffsets();
-        _visiblePageHost = null;
-        ClearPageHostContents();
-        var releasedViewCount = 0;
-        if (TryGetPageConverter(out var converter))
-        {
-            releasedViewCount = converter.ClearCache();
-        }
-
-        _pageViewsReleasedWhileHidden = releasedViewCount > 0;
-        if (_pageViewsReleasedWhileHidden)
-        {
-            AppLogger.Debug($"Released {releasedViewCount} hidden page views");
-        }
-
-#if DEBUG
-        AppLogger.Info($"[StartupTrace] Hidden page release views={releasedViewCount} private_before={FormatMemory(_hiddenMemoryBeforeRelease)} private_after_release={FormatMemory(GetPrivateMemorySize())}");
-#endif
-
-        Dispatcher.UIThread.Post(CollectHiddenMemory, DispatcherPriority.Background);
-    }
-
-    private void RestoreReleasedPageViews()
-    {
-        if (!_pageViewsReleasedWhileHidden || _attachedViewModel is null)
-        {
-            return;
-        }
-
-        _pageViewsReleasedWhileHidden = false;
-        ShowInitialPage(_attachedViewModel.CurrentPage);
-    }
-
-    private void CollectHiddenMemory()
-    {
-        if (IsVisible || _isShutdownRequested)
-        {
-            return;
-        }
-
-#if DEBUG
-        var privateBeforeCollection = GetPrivateMemorySize();
-#endif
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-#if DEBUG
-        AppLogger.Info($"[StartupTrace] Hidden memory collected private_before_release={FormatMemory(_hiddenMemoryBeforeRelease)} private_before_gc={FormatMemory(privateBeforeCollection)} private_after_gc={FormatMemory(GetPrivateMemorySize())}");
-#endif
-    }
-
-#if DEBUG
-    private static long GetPrivateMemorySize()
-    {
-        using var process = Process.GetCurrentProcess();
-        process.Refresh();
-        return process.PrivateMemorySize64;
-    }
-
-    private static string FormatMemory(long bytes) => $"{bytes / 1024d / 1024d:0.0}MB";
-#endif
-
-    private void ClearTitleBarHoverState()
-    {
-        foreach (var button in CaptionButtons.Children.OfType<Button>())
-        {
-            var pseudoClasses = (IPseudoClasses)button.Classes;
-            pseudoClasses.Set(":pointerover", false);
-        }
-    }
-
-    private void OnTitleBarStateClearedFrame(TimeSpan _)
-    {
-        RequestAnimationFrame(HideToTrayOnSecondFrame);
-    }
-
-    private void HideToTrayOnSecondFrame(TimeSpan _)
-    {
-        Hide();
     }
 
     private void OnCustomAccentRequested(object? sender, EventArgs args)

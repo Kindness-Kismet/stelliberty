@@ -29,9 +29,12 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
         _service = service;
         _globalHotkeyService = globalHotkeyService;
         ToggleAutoStartCommand = new RelayCommand(() => SetAutoStartEnabled(!IsAutoStartEnabled));
-        ClearWindowToggleHotkeyCommand = new RelayCommand(() => SetWindowToggleHotkey(string.Empty));
-        ClearSystemProxyToggleHotkeyCommand = new RelayCommand(() => SetSystemProxyToggleHotkey(string.Empty));
-        ClearTunToggleHotkeyCommand = new RelayCommand(() => SetTunToggleHotkey(string.Empty));
+        ClearWindowToggleHotkeyCommand = new RelayCommand(
+            () => SetWindowToggleHotkeyAsync(string.Empty).SafeFireAndForget("ClearWindowToggleHotkey"));
+        ClearSystemProxyToggleHotkeyCommand = new RelayCommand(
+            () => SetSystemProxyToggleHotkeyAsync(string.Empty).SafeFireAndForget("ClearSystemProxyToggleHotkey"));
+        ClearTunToggleHotkeyCommand = new RelayCommand(
+            () => SetTunToggleHotkeyAsync(string.Empty).SafeFireAndForget("ClearTunToggleHotkey"));
         _localization.LanguageChanged += OnLanguageChanged;
     }
 
@@ -83,7 +86,7 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
     public bool IsSilentStartEnabled
     {
         get => _settings.IsSilentStartEnabled;
-        set => Apply(_settings.IsSilentStartEnabled, value, next => _settings.IsSilentStartEnabled = next);
+        set => SetSilentStartEnabled(value);
     }
 
     public bool IsMinimizeToTrayEnabled
@@ -147,14 +150,40 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsAutoStartEnabled));
     }
 
+    private void SetSilentStartEnabled(bool isEnabled)
+    {
+        if (_settings.IsSilentStartEnabled == isEnabled)
+        {
+            return;
+        }
+
+        var previous = _settings.IsSilentStartEnabled;
+        _settings.IsSilentStartEnabled = isEnabled;
+        try
+        {
+            if (_settings.IsAutoStartEnabled)
+            {
+                _service.Apply(BuildRequest(isAutoStartEnabled: true));
+            }
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception exception)
+        {
+            _settings.IsSilentStartEnabled = previous;
+            AppLogger.Warning($"App behavior apply failed: {exception.Message}");
+        }
+
+        OnPropertyChanged(nameof(IsSilentStartEnabled));
+    }
+
     public void RefreshFromSettings()
     {
         OnPropertyChanged(string.Empty);
     }
 
-    public void SetWindowToggleHotkey(string gesture)
+    public Task SetWindowToggleHotkeyAsync(string gesture)
     {
-        SetHotkey(
+        return SetHotkeyAsync(
             GlobalHotkeyAction.ToggleWindow,
             gesture,
             _settings.WindowToggleHotkey,
@@ -162,9 +191,9 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
             nameof(WindowToggleHotkey));
     }
 
-    public void SetSystemProxyToggleHotkey(string gesture)
+    public Task SetSystemProxyToggleHotkeyAsync(string gesture)
     {
-        SetHotkey(
+        return SetHotkeyAsync(
             GlobalHotkeyAction.ToggleSystemProxy,
             gesture,
             _settings.SystemProxyToggleHotkey,
@@ -172,9 +201,9 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
             nameof(SystemProxyToggleHotkey));
     }
 
-    public void SetTunToggleHotkey(string gesture)
+    public Task SetTunToggleHotkeyAsync(string gesture)
     {
-        SetHotkey(
+        return SetHotkeyAsync(
             GlobalHotkeyAction.ToggleTun,
             gesture,
             _settings.TunToggleHotkey,
@@ -184,17 +213,17 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
 
     public void SetHotkeyCaptureActive(bool isActive)
     {
-        _globalHotkeyService.SetActivationSuppressed(isActive);
+        SetHotkeyCaptureActiveAsync(isActive).SafeFireAndForget("SetHotkeyCaptureActive");
     }
 
 #if DEBUG
-    public bool SimulateHotkeyActivation(GlobalHotkeyAction action)
+    public Task<bool> SimulateHotkeyActivationAsync(GlobalHotkeyAction action)
     {
-        return _globalHotkeyService.SimulateActivation(action);
+        return _globalHotkeyService.SimulateActivationAsync(action);
     }
 #endif
 
-    private void SetHotkey(
+    private async Task SetHotkeyAsync(
         GlobalHotkeyAction action,
         string gesture,
         string currentValue,
@@ -202,7 +231,17 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
         string propertyName)
     {
         var nextValue = gesture.Trim();
-        var result = _globalHotkeyService.Apply(action, nextValue);
+        GlobalHotkeyApplyResult result;
+        try
+        {
+            result = await _globalHotkeyService.ApplyAsync(action, nextValue).ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"Global hotkey apply failed: action={action} error={exception.Message}");
+            ShowHotkeyResult(GlobalHotkeyApplyResult.Failure(GlobalHotkeyApplyError.Failed), nextValue);
+            return;
+        }
         if (!result.IsSuccess)
         {
             AppLogger.Warning($"Global hotkey apply failed: action={action} error={result.Error}");
@@ -223,7 +262,16 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
         }
         catch (Exception exception)
         {
-            var restoreResult = _globalHotkeyService.Apply(action, currentValue);
+            GlobalHotkeyApplyResult restoreResult;
+            try
+            {
+                restoreResult = await _globalHotkeyService.ApplyAsync(action, currentValue).ConfigureAwait(true);
+            }
+            catch (Exception restoreException)
+            {
+                restoreResult = GlobalHotkeyApplyResult.Failure(GlobalHotkeyApplyError.Failed);
+                AppLogger.Warning($"Global hotkey restore failed: action={action} error={restoreException.Message}");
+            }
             assign(currentValue);
             AppLogger.Warning($"Global hotkey save failed: action={action} error={exception.Message}");
             if (!restoreResult.IsSuccess)
@@ -240,6 +288,18 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
 
         OnPropertyChanged(propertyName);
         ShowHotkeyResult(result, nextValue);
+    }
+
+    private async Task SetHotkeyCaptureActiveAsync(bool isActive)
+    {
+        try
+        {
+            await _globalHotkeyService.SetActivationSuppressedAsync(isActive).ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"Global hotkey suppression failed: {exception.Message}");
+        }
     }
 
     public void Dispose()

@@ -29,9 +29,17 @@ public static class AppRuntimeNames
 
     public static string CoreLockPrefix => $".{FileToken(AppMetadata.Name)}-core-";
 
+    public static string TrayBinaryName => OperatingSystem.IsWindows()
+        ? $"{FileToken(AppMetadata.Name)}.exe"
+        : FileToken(AppMetadata.Name);
+
+    public static string UiBinaryName => OperatingSystem.IsWindows()
+        ? $"{FileToken(AppMetadata.Name)}_ui.exe"
+        : $"{FileToken(AppMetadata.Name)}_ui";
+
     public static string UserAgent => $"{FileToken(AppMetadata.Name)}/{AppMetadata.Version}";
 
-    public static string ResourceAuthority => AppMetadata.Name;
+    public static string UiResourceAuthority => $"{AppMetadata.Name}_ui";
 
     public static string FileNameToken => FileToken(AppMetadata.Name);
 
