@@ -2,11 +2,16 @@ namespace Stelliberty.Application.Platform;
 
 public interface IGlobalHotkeyService : IDisposable
 {
-    GlobalHotkeyApplyResult Apply(GlobalHotkeyAction action, string gesture);
+    Task<GlobalHotkeyApplyResult> ApplyAsync(
+        GlobalHotkeyAction action,
+        string gesture,
+        CancellationToken cancellationToken = default);
 
-    void SetActivationSuppressed(bool isSuppressed);
+    Task SetActivationSuppressedAsync(bool isSuppressed, CancellationToken cancellationToken = default);
 
 #if DEBUG
-    bool SimulateActivation(GlobalHotkeyAction action);
+    Task<bool> SimulateActivationAsync(
+        GlobalHotkeyAction action,
+        CancellationToken cancellationToken = default);
 #endif
 }

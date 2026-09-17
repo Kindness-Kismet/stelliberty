@@ -1,7 +1,8 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-APP_PROJECT = ROOT / "src" / "Stelliberty.Desktop" / "Stelliberty.Desktop.csproj"
+DESKTOP_PROJECT = ROOT / "src" / "Stelliberty.Desktop" / "Stelliberty.Desktop.csproj"
+TRAY_PROJECT = ROOT / "src" / "Stelliberty.Tray" / "Stelliberty.Tray.csproj"
 BUILD_PROPS = ROOT / "Directory.Build.props"
 RUST_WORKSPACE = ROOT / "Cargo.toml"
 BUILD_DIR = ROOT / "build"

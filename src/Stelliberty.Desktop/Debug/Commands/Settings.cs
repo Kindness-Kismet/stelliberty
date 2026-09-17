@@ -33,7 +33,7 @@ internal static partial class DebugCommands
 
         if (spec.StartsWith("app-behavior.", StringComparison.OrdinalIgnoreCase))
         {
-            return Task.FromResult<string?>(ExecuteAppBehaviorSettingsCommand(viewModel, spec["app-behavior.".Length..].Trim()));
+            return ExecuteAppBehaviorSettingsCommandAsync(viewModel, spec["app-behavior.".Length..].Trim());
         }
 
         if (spec.StartsWith("update.", StringComparison.OrdinalIgnoreCase))
@@ -74,6 +74,7 @@ internal static partial class DebugCommands
             $"windowEffect={viewModel.Theme.SelectedWindowEffect}",
             $"silentStart={Bool(viewModel.AppBehavior.IsSilentStartEnabled)}",
             $"minimizeToTray={Bool(viewModel.AppBehavior.IsMinimizeToTrayEnabled)}",
+            $"lightweightMode={Bool(viewModel.AppBehavior.IsLightweightModeEnabled)}",
             $"trayDoubleClick={Bool(viewModel.AppBehavior.IsTrayDoubleClickEnabled)}",
             $"lazyMode={Bool(viewModel.AppBehavior.IsLazyModeEnabled)}",
             $"titleBarFps={Bool(viewModel.AppBehavior.IsTitleBarFpsVisible)}",
@@ -102,6 +103,7 @@ internal static partial class DebugCommands
         return string.Join(";", [
             $"silentStart={Bool(behavior.IsSilentStartEnabled)}",
             $"minimizeToTray={Bool(behavior.IsMinimizeToTrayEnabled)}",
+            $"lightweightMode={Bool(behavior.IsLightweightModeEnabled)}",
             $"trayDoubleClick={Bool(behavior.IsTrayDoubleClickEnabled)}",
             $"lazyMode={Bool(behavior.IsLazyModeEnabled)}",
             $"titleBarFps={Bool(behavior.IsTitleBarFpsVisible)}",
@@ -295,7 +297,9 @@ internal static partial class DebugCommands
         throw new InvalidOperationException($"Unknown window effect settings command: settings.window-effect.{spec}");
     }
 
-    private static string ExecuteAppBehaviorSettingsCommand(MainWindowViewModel viewModel, string spec)
+    private static async Task<string?> ExecuteAppBehaviorSettingsCommandAsync(
+        MainWindowViewModel viewModel,
+        string spec)
     {
         if (string.Equals(spec, "list keys", StringComparison.OrdinalIgnoreCase))
         {
@@ -315,7 +319,7 @@ internal static partial class DebugCommands
                 throw new InvalidOperationException("settings.app-behavior.set usage: settings.app-behavior.set <key> <value>");
             }
 
-            SetAppBehaviorSetting(viewModel, parts[0], parts[1]);
+            await SetAppBehaviorSettingAsync(viewModel, parts[0], parts[1]);
             return AppBehaviorSettingsState(viewModel);
         }
 
@@ -672,6 +676,7 @@ internal static partial class DebugCommands
         [
             "silent-start",
             "minimize-to-tray",
+            "lightweight-mode",
             "tray-double-click",
             "lazy-mode",
             "titlebar-fps",
@@ -682,7 +687,10 @@ internal static partial class DebugCommands
         ];
     }
 
-    private static void SetAppBehaviorSetting(MainWindowViewModel viewModel, string key, string value)
+    private static async Task SetAppBehaviorSettingAsync(
+        MainWindowViewModel viewModel,
+        string key,
+        string value)
     {
         var behavior = viewModel.AppBehavior;
         var normalizedValue = NormalizeInputValue(value);
@@ -690,13 +698,14 @@ internal static partial class DebugCommands
         {
             case "silent-start": behavior.IsSilentStartEnabled = ParseBool(normalizedValue); break;
             case "minimize-to-tray": behavior.IsMinimizeToTrayEnabled = ParseBool(normalizedValue); break;
+            case "lightweight-mode": behavior.IsLightweightModeEnabled = ParseBool(normalizedValue); break;
             case "tray-double-click": behavior.IsTrayDoubleClickEnabled = ParseBool(normalizedValue); break;
             case "lazy-mode": behavior.IsLazyModeEnabled = ParseBool(normalizedValue); break;
             case "titlebar-fps": behavior.IsTitleBarFpsVisible = ParseBool(normalizedValue); break;
             case "auto-start": behavior.SetAutoStartEnabled(ParseBool(normalizedValue)); break;
-            case "window-toggle-hotkey": behavior.SetWindowToggleHotkey(normalizedValue); break;
-            case "system-proxy-toggle-hotkey": behavior.SetSystemProxyToggleHotkey(normalizedValue); break;
-            case "tun-toggle-hotkey": behavior.SetTunToggleHotkey(normalizedValue); break;
+            case "window-toggle-hotkey": await behavior.SetWindowToggleHotkeyAsync(normalizedValue); break;
+            case "system-proxy-toggle-hotkey": await behavior.SetSystemProxyToggleHotkeyAsync(normalizedValue); break;
+            case "tun-toggle-hotkey": await behavior.SetTunToggleHotkeyAsync(normalizedValue); break;
             default: throw new InvalidOperationException($"Unknown app behavior setting: {key}");
         }
     }

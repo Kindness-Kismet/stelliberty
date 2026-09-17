@@ -64,7 +64,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     public MainWindowViewModel(
         IAppSettingsStore settingsStore,
         ILocalizationService localization,
-        ISystemProxyService systemProxyService,
+        ISystemProxyController systemProxyService,
         IAppBehaviorService appBehaviorService,
         IGlobalHotkeyService globalHotkeyService,
         SubscriptionPageViewModel subscriptionPage,
@@ -80,7 +80,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         IUwpLoopbackService? uwpLoopbackService = null,
         ISystemProxyHostDetector? systemProxyHostDetector = null,
         IServiceModeManager? serviceModeManager = null,
-        Func<bool>? isServiceModeCoreHostActive = null,
         Func<SystemProxyApplicationRequest>? systemProxyRequestFactory = null,
         SelectedRuntimeFallbackGenerator? runtimeFallbackGenerator = null,
         RuntimeConfigGenerator? runtimeConfigGenerator = null,
@@ -95,10 +94,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         ServiceModeStatus? initialServiceModeStatus = null,
         SystemProxyPlatform systemPlatform = SystemProxyPlatform.Other,
         IClipboardWriter? clipboardWriter = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionActivator = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionDeactivator = null,
-        Action? serviceModeCoreTransitionStarting = null,
-        Func<CancellationToken, Task>? serviceModeCoreTransitionCompleted = null,
         IAppLogReader? appLogReader = null,
         IAppLogExporter? appLogExporter = null)
     {
@@ -123,14 +118,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _runtimeConfigGenerator = runtimeConfigGenerator ?? new RuntimeConfigGenerator();
         _runtimeStore = runtimeStore;
         CoreManager = coreManager;
-        var runMode = processPrivilegeProbe?.Detect() ?? ProcessRunMode.Normal;
-        var hasInitialServiceTunHost = initialServiceModeStatus?.IsRunning == true;
-        var wasTunRevokedForPermission = AppSettingsNormalizer.RevokeTunIfUnavailable(_settings, runMode, hasInitialServiceTunHost);
-        if (wasTunRevokedForPermission)
-        {
-            settingsStore.Save(_settings);
-        }
-
         Update = new SettingsUpdateViewModel(_settings, settingsStore, localization, _now, updateChecker);
         AppBehavior = new SettingsAppBehaviorViewModel(_settings, settingsStore, localization, appBehaviorService, globalHotkeyService);
         AppBehavior.ToastRequested += OnToastRequested;
@@ -151,7 +138,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             systemProxyService,
             resolvedSystemProxyRequestFactory,
             serviceModeManager,
-            isServiceModeCoreHostActive,
             CoreConfig.ApplyTunFromHome,
             networkConnectionProbe,
             homeProxyClient,
@@ -165,11 +151,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             initialServiceModeStatus,
             localization,
             systemPlatform,
-            clipboardWriter,
-            serviceModeSessionActivator,
-            serviceModeSessionDeactivator,
-            serviceModeCoreTransitionStarting,
-            serviceModeCoreTransitionCompleted);
+            clipboardWriter);
         SystemIntegration = new SettingsSystemIntegrationViewModel(
             _settings,
             settingsStore,
@@ -181,17 +163,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         SystemIntegration.ToastRequested += OnToastRequested;
         HomePage.ToastRequested += OnToastRequested;
         Update.ToastRequested += OnToastRequested;
-        if (wasTunRevokedForPermission)
-        {
-            ShowToast(Localize("Home.Toast.TunDisabledByPermission"), ToastType.Warning);
-        }
-
-        if (_settings.IsLazyModeEnabled)
-        {
-            HomePage.IsSystemProxyEnabled = true;
-        }
-
-        HomePage.ApplyTunState(AppSettingsNormalizer.EffectiveTunEnabled(_settings, runMode, hasInitialServiceTunHost));
+        // TUN 权限由托盘判定，界面只同步结果。
+        HomePage.ApplyTunState(_settings.IsTunEnabled);
         // 模式偏好是应用级状态；先注入主页和代理基线，再加载订阅。
         HomePage.ApplyOutboundMode(OutboundModeParser.TryParse(_settings.OutboundMode) ?? Domain.Proxies.OutboundMode.Rule);
         HomePage.RefreshNetworkConnection();
@@ -741,6 +714,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     // 宿主心跳只提供节奏；当前页面状态决定是否刷新。
     public void OnHomeRuntimeTick()
     {
+        SyncTunState();
         HomePage.RefreshServiceMode();
         if (CurrentPage == NavigationPage.Home)
         {
@@ -751,6 +725,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             // 连接是动态数据；可见且未暂停页面每秒拉取，避免入口为空。
             _ = ConnectionPage.RefreshConnectionsAsync();
         }
+    }
+
+    private void SyncTunState()
+    {
+        var isTunEnabled = _settingsStore.Load().IsTunEnabled;
+        if (_settings.IsTunEnabled == isTunEnabled && HomePage.IsTunEnabled == isTunEnabled)
+        {
+            return;
+        }
+
+        _settings.IsTunEnabled = isTunEnabled;
+        CoreConfig.RefreshFromSettings();
+        HomePage.ApplyTunState(isTunEnabled);
     }
 
     private void RefreshSelectedSubscriptionRuntime(string? subscriptionId, string successMessage, string failureMessage)

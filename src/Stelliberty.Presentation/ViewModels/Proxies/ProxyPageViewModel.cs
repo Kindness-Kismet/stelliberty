@@ -1308,6 +1308,17 @@ public sealed class ProxyPageViewModel : ViewModelBase, IDisposable
         RefreshSelectedGroup();
     }
 
+    public void ApplyBackgroundDelays(string? subscriptionId, IReadOnlyDictionary<string, int> delays)
+    {
+        if (subscriptionId is null || subscriptionId != _loadedSubscriptionId || delays.Count == 0)
+        {
+            return;
+        }
+        _config = _config.WithEntryDelays(delays).WithEntryDelays(_delayTests.BatchResults);
+        RefreshSelectedGroup();
+        RaiseProxyStateChanged();
+    }
+
     public void Dispose()
     {
         if (_localization is not null)

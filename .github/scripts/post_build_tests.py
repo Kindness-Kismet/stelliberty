@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 import shutil
 import socket
@@ -42,7 +43,8 @@ class PostBuildTests:
         self.os_family = os_family
         self.shortcut_only = shortcut_only
         self.env = os.environ.copy()
-        self.env.setdefault("STELLIBERTY_DEBUG_SERVICE_CI", "1")
+        if self.env.get("CI") == "true":
+            self.env.setdefault("STELLIBERTY_DEBUG_SERVICE_CI", "1")
         self.log_dir = Path(self.env.get("RUNNER_TEMP", ROOT / "build" / "post-build-tests"))
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.app_log_path = self.log_dir / "stelliberty-post-build-app.log"
@@ -86,17 +88,7 @@ class PostBuildTests:
             self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=false"]),
             self.require("window.state", contains=["visible=true"]),
         ))
-        self.step("Trigger window shortcut after recording", lambda: (
-            self.require("control.click Navigation.HomeButton"),
-            time.sleep(0.6),
-            self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=true"]),
-            self.require("window.state", contains=["visible=false"]),
-            self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=false"]),
-            self.require("window.state", contains=["visible=false"]),
-            time.sleep(0.6),
-            self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=true"]),
-            self.require("window.state", contains=["visible=true"]),
-        ))
+        self.step("Toggle UI through the tray shortcut after recording", self.verify_window_shortcut)
         self.step("Restore shortcut setting", self.restore_window_shortcut)
         self.step("Close app after shortcut verification", self.stop_app_step)
 
@@ -447,7 +439,7 @@ class PostBuildTests:
                 kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             else:
                 kwargs["start_new_session"] = True
-            self.app_process = subprocess.Popen([str(self.app_exec)], **kwargs)
+            self.app_process = subprocess.Popen([str(self.app_exec), "--show-ui"], **kwargs)
 
         self.wait_debug_ready()
 
@@ -461,7 +453,7 @@ class PostBuildTests:
             return
 
         try:
-            self.command("app.quit", visible=False, allow_disconnect=True)
+            self.tray_command("stop")
             self.wait_for_app_exit(timeout=15)
         except Exception:
             pass
@@ -486,6 +478,43 @@ class PostBuildTests:
                 return
             time.sleep(0.5)
         raise PostBuildTestError("Debug port was not ready within 60s")
+
+    def tray_command(self, command: str):
+        result = subprocess.run(
+            [str(self.app_exec), "--debug-command", command], cwd=self.app_output, env=self.env,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW if self.os_family == "windows" else 0)
+        if result.returncode:
+            raise PostBuildTestError(result.stderr.strip() or "Tray command failed")
+        return json.loads(result.stdout)
+
+    def wait_ui_closed(self) -> dict:
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            state = self.tray_command("state")
+            if state["UiPid"] is None:
+                return state
+            time.sleep(0.2)
+        raise PostBuildTestError("UI session remained registered after closing the window")
+
+    def verify_window_shortcut(self) -> None:
+        self.require("control.click Navigation.HomeButton")
+        time.sleep(0.6)
+        lightweight_mode = self.state_value(self.require("settings.app-behavior.state"), "lightweightMode") == "true"
+        before = self.tray_command("state")
+        self.command("hotkey.trigger window", allow_disconnect=True)
+        if lightweight_mode:
+            self.wait_ui_closed()
+        else:
+            self.wait_for("window.state", contains=["visible=false"], timeout=15, interval=0.1)
+        time.sleep(0.6)
+        if not self.tray_command("toggle-window"):
+            raise PostBuildTestError("The tray shortcut could not reopen the UI")
+        self.wait_debug_ready()
+        after = self.tray_command("state")
+        ui_recreated = before["UiPid"] != after["UiPid"]
+        if before["TrayPid"] != after["TrayPid"] or ui_recreated != lightweight_mode:
+            raise PostBuildTestError("The shortcut did not follow the lightweight mode preference")
 
     def try_probe_port(self) -> bool:
         try:

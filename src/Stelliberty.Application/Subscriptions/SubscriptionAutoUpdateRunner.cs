@@ -32,6 +32,10 @@ public sealed class SubscriptionAutoUpdateRunner(
                 updatedIds.AddRange(result.UpdatedSubscriptionIds);
                 skippedIds.AddRange(result.SkippedSubscriptionIds);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 AppLogger.Error(exception, $"Subscription auto update failed: {subscriptionId}");

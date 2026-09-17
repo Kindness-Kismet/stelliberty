@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="src/Stelliberty.Application/Stelliberty.Application.csproj" />
+  <Project Path="src/Stelliberty.Tray/Stelliberty.Tray.csproj" />
   <Project Path="src/Stelliberty.Domain/Stelliberty.Domain.csproj" />
   <Project Path="src/Stelliberty.Infrastructure/Stelliberty.Infrastructure.csproj" />
   <Project Path="src/Stelliberty.Native/Stelliberty.Native.csproj" />

@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from build_support.commands import run
@@ -8,7 +9,7 @@ from build_support.fonts import ensure_app_fonts
 from build_support.installer import pack_installers
 from build_support.layout import organize_dependency_directory, output_name, service_binary_name, zip_output
 from build_support.models import AppMetadata, BuildRequest, PlatformTarget
-from build_support.paths import APP_PROJECT, BUILD_DIR, CORE_DIRECTORY, PRE_ASSETS_DIR, ROOT, RUST_WORKSPACE, SERVICE_UPDATE_DIRECTORY
+from build_support.paths import BUILD_DIR, CORE_DIRECTORY, DESKTOP_PROJECT, PRE_ASSETS_DIR, ROOT, RUST_WORKSPACE, SERVICE_UPDATE_DIRECTORY, TRAY_PROJECT
 from build_support.processes import close_running_output_app
 from build_support.timer import timed_step
 
@@ -128,10 +129,22 @@ def build_rust(metadata: AppMetadata, configuration: str, target: PlatformTarget
     run(command, env)
 
 def publish_dotnet(metadata: AppMetadata, configuration: str, target: PlatformTarget, output_dir: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="stelliberty-dotnet-publish-") as temp_dir:
+        staging_dir = Path(temp_dir)
+        tray_output = staging_dir / "tray"
+        ui_output = staging_dir / "ui"
+        publish_dotnet_project(TRAY_PROJECT, metadata, configuration, target, tray_output)
+        publish_dotnet_project(DESKTOP_PROJECT, metadata, configuration, target, ui_output)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(tray_output, output_dir, dirs_exist_ok=True)
+        shutil.copytree(ui_output, output_dir, dirs_exist_ok=True)
+
+
+def publish_dotnet_project(project: Path, metadata: AppMetadata, configuration: str, target: PlatformTarget, output_dir: Path) -> None:
     command = [
         "dotnet",
         "publish",
-        str(APP_PROJECT),
+        str(project),
         "--configuration",
         dotnet_configuration(configuration),
         "--runtime",

@@ -11,5 +11,4 @@ public interface IServiceModeManager
 
     Task<ServiceModeOperationResult> UninstallAsync(CancellationToken cancellationToken = default);
 
-    Task<ServiceModeOperationResult> SendHeartbeatAsync(CancellationToken cancellationToken = default);
 }

@@ -6,31 +6,24 @@ using HotAvalonia;
 #endif
 using Stelliberty.Application.Diagnostics;
 using Stelliberty.Application.Platform;
-using Stelliberty.Desktop.Services;
 
 namespace Stelliberty.Desktop;
 
 internal static class AppRuntime
 {
-    private static string AppFontFamily => $"avares://{AppRuntimeNames.ResourceAuthority}/Assets/fonts#Google Sans";
-    private static string CjkFontFamily => $"avares://{AppRuntimeNames.ResourceAuthority}/Assets/fonts#Noto Sans SC";
+    private static string AppFontFamily => $"avares://{AppRuntimeNames.UiResourceAuthority}/Assets/fonts#Google Sans";
+    private static string CjkFontFamily => $"avares://{AppRuntimeNames.UiResourceAuthority}/Assets/fonts#Noto Sans SC";
 
-    public static void Run(string[] args)
+    public static void RunUi(string[] args)
     {
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
-        using var singleInstance = new SingleInstanceService();
-        if (!singleInstance.OwnsInstance)
-        {
-            return;
-        }
-
-        AppLogger.Info("App startup");
+        AppLogger.Info("Desktop UI startup");
 
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-            AppLogger.Info("App shutdown");
+            AppLogger.Info("Desktop UI shutdown");
         }
         catch (Exception exception)
         {
@@ -83,7 +76,7 @@ internal static class AppRuntime
 #if DEBUG
     private static string? ResolveProjectPath(Assembly assembly)
     {
-        if (assembly.GetName().Name != AppMetadata.Name)
+        if (assembly.GetName().Name != AppRuntimeNames.UiResourceAuthority)
         {
             return null;
         }

@@ -11,6 +11,7 @@ namespace Stelliberty.Infrastructure.Core;
 // JSON Lines 的 id 用于关联请求；无 id 帧是事件。
 public sealed class JsonRpcPipeClient : IDisposable, IAsyncDisposable
 {
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly string _pipeName;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pending = new(StringComparer.Ordinal);
     private Stream? _stream;
@@ -23,6 +24,8 @@ public sealed class JsonRpcPipeClient : IDisposable, IAsyncDisposable
     public JsonRpcPipeClient(string pipeName) => _pipeName = pipeName;
 
     public event EventHandler<EventNotification>? EventReceived;
+
+    public event EventHandler? Disconnected;
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
@@ -76,8 +79,17 @@ public sealed class JsonRpcPipeClient : IDisposable, IAsyncDisposable
         try
         {
             // 写入前先登记 pending，避免早到响应丢失匹配。
-            await _writer.WriteLineAsync(payload.AsMemory(), cancellationToken).ConfigureAwait(false);
-            await _writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            // 并发请求共用一条管道，完整帧必须串行写入。
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _writer.WriteLineAsync(payload.AsMemory(), cancellationToken).ConfigureAwait(false);
+                await _writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
             await using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
             return await tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
         }
@@ -130,6 +142,12 @@ public sealed class JsonRpcPipeClient : IDisposable, IAsyncDisposable
                     }
                 }
             }
+
+            if (!ct.IsCancellationRequested && !_isDisposed)
+            {
+                FailPending(new IOException("IPC connection closed before a response was received."));
+                NotifyDisconnected();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -141,11 +159,8 @@ public sealed class JsonRpcPipeClient : IDisposable, IAsyncDisposable
         {
             // 读取循环失败会中断所有待处理调用的响应源；无 pending 时仍需留下第一现场。
             AppLogger.Error(ex, "IPC read loop failed");
-            foreach (var kv in _pending)
-            {
-                kv.Value.TrySetException(ex);
-            }
-            _pending.Clear();
+            FailPending(ex);
+            NotifyDisconnected();
         }
     }
 
@@ -205,6 +220,28 @@ public sealed class JsonRpcPipeClient : IDisposable, IAsyncDisposable
         }
 
         _pending.Clear();
+    }
+
+    private void FailPending(Exception exception)
+    {
+        foreach (var pending in _pending.Values)
+        {
+            pending.TrySetException(exception);
+        }
+
+        _pending.Clear();
+    }
+
+    private void NotifyDisconnected()
+    {
+        try
+        {
+            Disconnected?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Error(exception, "IPC disconnect observer failed");
+        }
     }
 
     private void ThrowIfDisposed()

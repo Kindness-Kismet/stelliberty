@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>$(AppName)</AssemblyName>
+    <Version>$(AppVersion)</Version>
+    <ApplicationIcon>..\Stelliberty.Desktop\Assets\win\app_icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="12.1.2" PrivateAssets="All" Publish="True" />
+    <PackageReference Include="Semi.Avalonia" Version="12.1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stelliberty.Application\Stelliberty.Application.csproj" />
+    <ProjectReference Include="..\Stelliberty.Infrastructure\Stelliberty.Infrastructure.csproj" />
+    <ProjectReference Include="..\Stelliberty.Native\Stelliberty.Native.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <AvaloniaResource Include="..\Stelliberty.Desktop\Assets\win\tray\**" Link="Assets\win\tray\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <AvaloniaResource Include="..\Stelliberty.Desktop\Assets\linux\tray\**" Link="Assets\linux\tray\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+    <AvaloniaResource Include="..\Stelliberty.Desktop\Assets\macos\tray\**" Link="Assets\macos\tray\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

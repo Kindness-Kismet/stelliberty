@@ -5,7 +5,7 @@ namespace Stelliberty.Desktop.Debug;
 
 internal static partial class DebugCommands
 {
-    private static string ExecuteHotkeyCommand(MainWindow window, string command)
+    private static async Task<string?> ExecuteHotkeyCommandAsync(MainWindow window, string command)
     {
         var actionName = command["hotkey.trigger ".Length..].Trim();
         var action = actionName.ToLowerInvariant() switch
@@ -16,7 +16,7 @@ internal static partial class DebugCommands
             _ => throw new InvalidOperationException($"Unknown hotkey action: {actionName}"),
         };
 
-        var activated = RequireViewModel(window).AppBehavior.SimulateHotkeyActivation(action);
+        var activated = await RequireViewModel(window).AppBehavior.SimulateHotkeyActivationAsync(action);
         return $"action={action};activated={activated.ToString().ToLowerInvariant()}";
     }
 }

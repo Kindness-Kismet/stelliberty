@@ -16,18 +16,11 @@ namespace Stelliberty.Presentation.ViewModels;
 
 public sealed class HomePageViewModel : ViewModelBase, IDisposable
 {
-    // 系统关机不能无限等待正在执行的代理设置。
-    private static readonly TimeSpan ShutdownProxyLockTimeout = TimeSpan.FromSeconds(2);
     private readonly ILocalizationService? _localization;
     private readonly SystemProxyPlatform _systemPlatform;
     private readonly IClipboardWriter? _clipboardWriter;
-    private readonly ISystemProxyService _systemProxyService;
+    private readonly ISystemProxyController _systemProxyService;
     private readonly IServiceModeManager? _serviceModeManager;
-    private readonly Func<bool> _isServiceModeCoreHostActive;
-    private readonly Func<CancellationToken, Task<ServiceModeOperationResult>>? _serviceModeSessionActivator;
-    private readonly Func<CancellationToken, Task<ServiceModeOperationResult>>? _serviceModeSessionDeactivator;
-    private readonly Action? _serviceModeCoreTransitionStarting;
-    private readonly Func<CancellationToken, Task>? _serviceModeCoreTransitionCompleted;
     private readonly Func<SystemProxyApplicationRequest> _systemProxyRequestFactory;
     private readonly Action<bool>? _tunStateChanged;
 
@@ -42,11 +35,9 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     private readonly Func<DateTimeOffset> _now;
 
     private readonly SynchronizationContext? _uiContext;
-    private readonly SemaphoreSlim _systemProxyApplyLock = new(1, 1);
     private bool _isSystemProxyEnabled;
-
-    private bool _hasEnabledSystemProxy;
     private int _systemProxyApplyVersion;
+    private int _pendingSystemProxyOperations;
     private bool _isTunEnabled;
     private int _tunApplyVersion;
 
@@ -71,8 +62,8 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     private readonly Queue<double> _uploadSpeedHistory = new();
     private readonly Queue<double> _downloadSpeedHistory = new();
     private bool _isSpeedChartLive = true;
+    private readonly TrafficRateTracker _directRuntimeTrafficTracker = new();
 
-    private readonly TrafficRateTracker _trafficTracker = new();
     private bool _isCoreRestarting;
     private bool _isCoreUpdating;
     private bool _isServiceModeBusy;
@@ -87,10 +78,9 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _refreshCancellation;
 
     public HomePageViewModel(
-        ISystemProxyService systemProxyService,
+        ISystemProxyController systemProxyService,
         Func<SystemProxyApplicationRequest> systemProxyRequestFactory,
         IServiceModeManager? serviceModeManager = null,
-        Func<bool>? isServiceModeCoreHostActive = null,
         Action<bool>? tunStateChanged = null,
         INetworkConnectionProbe? networkProbe = null,
         IProxyCoreClient? proxyClient = null,
@@ -104,22 +94,14 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         ServiceModeStatus? initialServiceModeStatus = null,
         ILocalizationService? localization = null,
         SystemProxyPlatform systemPlatform = SystemProxyPlatform.Other,
-        IClipboardWriter? clipboardWriter = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionActivator = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionDeactivator = null,
-        Action? serviceModeCoreTransitionStarting = null,
-        Func<CancellationToken, Task>? serviceModeCoreTransitionCompleted = null)
+        IClipboardWriter? clipboardWriter = null)
     {
         _localization = localization;
         _systemPlatform = systemPlatform;
         _clipboardWriter = clipboardWriter;
         _systemProxyService = systemProxyService;
+        _systemProxyService.StatusChanged += OnSystemProxyStatusChanged;
         _serviceModeManager = serviceModeManager;
-        _isServiceModeCoreHostActive = isServiceModeCoreHostActive ?? (() => serviceModeManager is not null);
-        _serviceModeSessionActivator = serviceModeSessionActivator;
-        _serviceModeSessionDeactivator = serviceModeSessionDeactivator;
-        _serviceModeCoreTransitionStarting = serviceModeCoreTransitionStarting;
-        _serviceModeCoreTransitionCompleted = serviceModeCoreTransitionCompleted;
         _systemProxyRequestFactory = systemProxyRequestFactory;
         _tunStateChanged = tunStateChanged;
         _coreRestart = coreRestart;
@@ -152,6 +134,7 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         ToggleServiceModeCommand = new RelayCommand(() => _ = ToggleServiceModeAsync());
 
         SeedZeroHistory();
+        _ = RefreshSystemProxyStatusAsync();
         RefreshServiceMode(force: true);
     }
 
@@ -212,7 +195,7 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
             _coreRunningSince = null;
             _uptime = TimeSpan.Zero;
 
-            _trafficTracker.Reset();
+            _directRuntimeTrafficTracker.Reset();
             _uploadSpeed = 0;
             _downloadSpeed = 0;
             _uploadTotal = 0;
@@ -248,9 +231,9 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     }
 
     public bool CanToggleTun => _runMode is ProcessRunMode.Administrator or ProcessRunMode.Service
-        || (_serviceModeStatus.IsRunning && _isServiceModeCoreHostActive());
+        || (_serviceModeStatus.IsRunning && IsServiceModeCoreHostActive);
 
-    public string CoreHostMode => _isServiceModeCoreHostActive() ? "service" : "process";
+    public string CoreHostMode => IsServiceModeCoreHostActive ? "service" : "process";
 
     public string PrivilegeModeText => _serviceModeStatus.IsRunning
         ? Localize("Home.RunMode.Service")
@@ -459,7 +442,12 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
                     && !cancellationToken.IsCancellationRequested
                     && refreshVersion == Volatile.Read(ref _runtimeRefreshVersion))
                 {
-                    Post(() => ApplyRuntime(snapshot.Stats, snapshot.Mode, snapshot.Version, snapshot.ConnectionCount));
+                    Post(() => ApplyRuntime(
+                        snapshot.Stats,
+                        snapshot.Mode,
+                        snapshot.Version,
+                        snapshot.ConnectionCount,
+                        snapshot.History));
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -526,11 +514,6 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         }
 
         var status = await _serviceModeManager.GetStatusAsync(cancellationToken);
-        if (status.IsRunning && _isServiceModeCoreHostActive())
-        {
-            await _serviceModeManager.SendHeartbeatAsync(cancellationToken);
-        }
-
         if (!cancellationToken.IsCancellationRequested
             && refreshVersion == Volatile.Read(ref _serviceModeRefreshVersion))
         {
@@ -539,7 +522,12 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         return status;
     }
 
-    private void ApplyRuntime(CoreRuntimeStats? stats, OutboundMode? mode, string? version, int? connectionCount)
+    private void ApplyRuntime(
+        CoreRuntimeStats? stats,
+        OutboundMode? mode,
+        string? version,
+        int? connectionCount,
+        IReadOnlyList<CoreRuntimeSample> history)
     {
         // 取消检查与 Post 投递之间存在窗口，销毁后不得再写状态。
         if (_isDisposed)
@@ -549,16 +537,26 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
 
         if (stats is not null)
         {
-            var sample = _trafficTracker.Update(stats.UploadTotal, stats.DownloadTotal, _now());
-            _uploadSpeed = stats.HasTrafficRate ? stats.UploadSpeed : sample.UploadSpeed;
-            _downloadSpeed = stats.HasTrafficRate ? stats.DownloadSpeed : sample.DownloadSpeed;
-            _uploadTotal = sample.UploadTotal;
-            _downloadTotal = sample.DownloadTotal;
+            var directSample = _directRuntimeTrafficTracker.Update(
+                stats.UploadTotal,
+                stats.DownloadTotal,
+                _now());
+            _uploadSpeed = stats.HasTrafficRate ? stats.UploadSpeed : directSample.UploadSpeed;
+            _downloadSpeed = stats.HasTrafficRate ? stats.DownloadSpeed : directSample.DownloadSpeed;
+            _uploadTotal = history.Count > 0 ? stats.UploadTotal : directSample.UploadTotal;
+            _downloadTotal = history.Count > 0 ? stats.DownloadTotal : directSample.DownloadTotal;
             _memoryValueText = ByteSize.Format(stats.Memory);
             if (_isSpeedChartLive)
             {
-                PushSpeedSample(_uploadSpeedHistory, _uploadSpeed);
-                PushSpeedSample(_downloadSpeedHistory, _downloadSpeed);
+                if (history.Count > 0)
+                {
+                    ApplySpeedHistory(history);
+                }
+                else
+                {
+                    PushSpeedSample(_uploadSpeedHistory, _uploadSpeed);
+                    PushSpeedSample(_downloadSpeedHistory, _downloadSpeed);
+                }
                 UploadSamples = _uploadSpeedHistory.ToArray();
                 DownloadSamples = _downloadSpeedHistory.ToArray();
             }
@@ -672,78 +670,33 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     {
         var version = Interlocked.Increment(ref _systemProxyApplyVersion);
         _isSystemProxyEnabled = shouldEnable;
-        if (shouldEnable)
-        {
-            _hasEnabledSystemProxy = true;
-        }
         RaiseHomeStateChanged();
         _ = Task.Run(() => ApplySystemProxyAsync(shouldEnable, version));
     }
 
-    public void DisableSystemProxyOnShutdown()
-    {
-        // 只关闭本实例的系统代理，保留外部代理状态。
-        Interlocked.Increment(ref _systemProxyApplyVersion);
-        if (!_systemProxyApplyLock.Wait(ShutdownProxyLockTimeout))
-        {
-            AppLogger.Warning("System proxy shutdown cleanup timed out waiting for the apply lock");
-            return;
-        }
-        try
-        {
-            if (!_hasEnabledSystemProxy)
-            {
-                return;
-            }
-            ApplySystemProxyCore(shouldEnable: false);
-            _hasEnabledSystemProxy = false;
-        }
-        catch (Exception exception)
-        {
-            AppLogger.Warning($"System proxy shutdown cleanup failed: {exception.Message}");
-        }
-        finally
-        {
-            _systemProxyApplyLock.Release();
-        }
-    }
-
     private async Task ApplySystemProxyAsync(bool shouldEnable, int version)
     {
+        Interlocked.Increment(ref _pendingSystemProxyOperations);
         try
         {
-            SystemProxyOperationResult result;
-            await _systemProxyApplyLock.WaitAsync().ConfigureAwait(false);
-            try
-            {
-                if (_isDisposed || version != Volatile.Read(ref _systemProxyApplyVersion))
-                {
-                    return;
-                }
-
-                result = ApplySystemProxyCore(shouldEnable);
-            }
-            finally
-            {
-                _systemProxyApplyLock.Release();
-            }
-
-            if (result.IsSuccess)
-            {
-                if (!_isDisposed && version == Volatile.Read(ref _systemProxyApplyVersion))
-                {
-                    _hasEnabledSystemProxy = shouldEnable;
-                }
-                return;
-            }
-
-            if (_isDisposed)
+            var request = shouldEnable ? _systemProxyRequestFactory.Invoke() : null;
+            var result = await _systemProxyService.SetEnabledAsync(
+                shouldEnable,
+                request,
+                _refreshCancellation?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            if (_isDisposed || version != Volatile.Read(ref _systemProxyApplyVersion))
             {
                 return;
             }
 
-            AppLogger.Warning($"System proxy apply returned failure: {result.Message}");
-            Post(() => ApplySystemProxyFailure(shouldEnable, version));
+            Post(() => ApplySystemProxyResult(result, version));
+            if (!result.IsSuccess)
+            {
+                AppLogger.Warning($"System proxy apply returned failure: {result.Message}");
+            }
+        }
+        catch (OperationCanceledException) when (_isDisposed)
+        {
         }
         catch (Exception exception)
         {
@@ -753,13 +706,10 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
                 Post(() => ApplySystemProxyFailure(shouldEnable, version));
             }
         }
-    }
-
-    private SystemProxyOperationResult ApplySystemProxyCore(bool shouldEnable)
-    {
-        return shouldEnable
-            ? _systemProxyService.Enable(_systemProxyRequestFactory.Invoke())
-            : _systemProxyService.Disable();
+        finally
+        {
+            Interlocked.Decrement(ref _pendingSystemProxyOperations);
+        }
     }
 
     private void ApplySystemProxyFailure(bool attemptedState, int version)
@@ -770,10 +720,69 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         }
 
         _isSystemProxyEnabled = !attemptedState;
-        _hasEnabledSystemProxy = !attemptedState;
         RaiseHomeStateChanged();
 
         RaiseToast(Localize("Home.Toast.SystemProxyFailed"), ToastType.Error);
+    }
+
+    private void ApplySystemProxyResult(SystemProxyApplyResult result, int version)
+    {
+        if (_isDisposed || version != Volatile.Read(ref _systemProxyApplyVersion))
+        {
+            return;
+        }
+
+        _isSystemProxyEnabled = result.Status.IsEnabled;
+        RaiseHomeStateChanged();
+        if (!result.IsSuccess)
+        {
+            RaiseToast(Localize("Home.Toast.SystemProxyFailed"), ToastType.Error);
+        }
+    }
+
+    private async Task RefreshSystemProxyStatusAsync()
+    {
+        var version = Volatile.Read(ref _systemProxyApplyVersion);
+        try
+        {
+            var status = await _systemProxyService.GetStatusAsync(
+                _refreshCancellation?.Token ?? CancellationToken.None).ConfigureAwait(false);
+            if (!_isDisposed && version == Volatile.Read(ref _systemProxyApplyVersion))
+            {
+                Post(() =>
+                {
+                    if (version == Volatile.Read(ref _systemProxyApplyVersion))
+                    {
+                        ApplySystemProxyStatus(status);
+                    }
+                });
+            }
+        }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException)
+        {
+            AppLogger.Warning($"System proxy status refresh failed: {exception.Message}");
+        }
+    }
+
+    private void OnSystemProxyStatusChanged(object? sender, SystemProxyStatus status)
+    {
+        if (_isDisposed || Volatile.Read(ref _pendingSystemProxyOperations) != 0)
+        {
+            return;
+        }
+
+        Post(() => ApplySystemProxyStatus(status));
+    }
+
+    private void ApplySystemProxyStatus(SystemProxyStatus status)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _isSystemProxyEnabled = status.IsEnabled;
+        RaiseHomeStateChanged();
     }
 
     private async Task RestartCoreAsync()
@@ -871,83 +880,14 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         _isServiceModeBusy = true;
         RaiseHomeStateChanged();
         var token = cancellationToken.CanBeCanceled ? cancellationToken : _refreshCancellation?.Token ?? CancellationToken.None;
-        var shouldDeactivateSession = !installOrUpdate && _isServiceModeCoreHostActive();
         ServiceModeOperationResult result;
-        var sessionActivationFailed = false;
-        var sessionDeactivationFailed = false;
-        var sessionTransitionHandled = false;
         try
         {
-            _serviceModeCoreTransitionStarting?.Invoke();
             result = installOrUpdate
                 ? await _serviceModeManager.InstallOrUpdateAsync(token)
                 : await _serviceModeManager.UninstallAsync(token);
 
-            if (installOrUpdate && result.IsSuccess && _serviceModeSessionActivator is not null)
-            {
-                try
-                {
-                    var activation = await _serviceModeSessionActivator(token);
-                    sessionTransitionHandled = true;
-                    if (activation.IsSuccess)
-                    {
-                        result = activation;
-                    }
-                    else
-                    {
-                        sessionActivationFailed = true;
-                        result = activation;
-                        AppLogger.Warning($"Service mode was installed but session activation failed: {activation.Message}");
-                    }
-                }
-                catch (OperationCanceledException exception) when (token.IsCancellationRequested)
-                {
-                    sessionActivationFailed = true;
-                    result = ServiceModeOperationResult.Canceled(exception.Message);
-                }
-                catch (Exception exception)
-                {
-                    sessionActivationFailed = true;
-                    result = ServiceModeOperationResult.Failed(exception.Message);
-                    AppLogger.Warning($"Service mode was installed but session activation failed: {exception.Message}");
-                }
-            }
-
-            if (shouldDeactivateSession && result.IsSuccess && _serviceModeSessionDeactivator is not null)
-            {
-                try
-                {
-                    var deactivation = await _serviceModeSessionDeactivator(token);
-                    sessionTransitionHandled = true;
-                    sessionDeactivationFailed = !deactivation.IsSuccess;
-                    result = deactivation;
-                    if (sessionDeactivationFailed)
-                    {
-                        AppLogger.Warning($"Service mode was uninstalled but normal session activation failed: {deactivation.Message}");
-                    }
-                }
-                catch (OperationCanceledException exception) when (token.IsCancellationRequested)
-                {
-                    sessionDeactivationFailed = true;
-                    result = ServiceModeOperationResult.Canceled(exception.Message);
-                }
-                catch (Exception exception)
-                {
-                    sessionDeactivationFailed = true;
-                    result = ServiceModeOperationResult.Failed(exception.Message);
-                    AppLogger.Warning($"Service mode was uninstalled but normal session activation failed: {exception.Message}");
-                }
-            }
-
-            if (sessionActivationFailed)
-            {
-                RaiseToast(Localize("Home.Toast.ServiceModeActivationFailed"), ToastType.Warning);
-            }
-            else if (sessionDeactivationFailed)
-            {
-                RaiseToast(Localize("Home.Toast.ServiceModeSessionRecoveryFailed"), ToastType.Warning);
-            }
-            else if (result.IsCanceled)
+            if (result.IsCanceled)
             {
                 RaiseToast(Localize("Home.Toast.ServiceModeOperationCanceled"), ToastType.Info);
             }
@@ -983,18 +923,6 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         {
             _isServiceModeBusy = false;
             _lastServiceModeProbe = null;
-            if (!sessionTransitionHandled && _serviceModeCoreTransitionCompleted is not null)
-            {
-                try
-                {
-                    await _serviceModeCoreTransitionCompleted(CancellationToken.None);
-                }
-                catch (Exception exception)
-                {
-                    AppLogger.Warning($"Service mode core transition completion failed: {exception.Message}");
-                }
-            }
-
             try
             {
                 await RefreshServiceModeAsync(token);
@@ -1018,6 +946,8 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         _serviceModeStatus = status;
         RaiseHomeStateChanged();
     }
+
+    private bool IsServiceModeCoreHostActive => _serviceModeStatus.IsRunning;
 
     private Task ApplyServiceModeStatusAsync(ServiceModeStatus status)
     {
@@ -1103,9 +1033,11 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
 
     private void ResetTraffic()
     {
-
-        // 总流量不能重置，所以用基线重置本地显示。
-        _trafficTracker.ResetBaseline();
+        if (_proxyClient is IRuntimeSnapshotClient runtimeClient)
+        {
+            _ = ResetRuntimeTrafficAsync(runtimeClient);
+        }
+        _directRuntimeTrafficTracker.ResetBaseline();
         _uploadSpeed = 0;
         _downloadSpeed = 0;
         _uploadTotal = 0;
@@ -1113,6 +1045,18 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         // 重置回到首次进入时使用的零基线。
         SeedZeroHistory();
         RaiseHomeStateChanged();
+    }
+
+    private static async Task ResetRuntimeTrafficAsync(IRuntimeSnapshotClient runtimeClient)
+    {
+        try
+        {
+            await runtimeClient.ResetRuntimeTrafficAsync();
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"Runtime traffic reset failed: {exception.Message}");
+        }
     }
 
     private void Post(Action action)
@@ -1235,6 +1179,23 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void ApplySpeedHistory(IReadOnlyList<CoreRuntimeSample> history)
+    {
+        _uploadSpeedHistory.Clear();
+        _downloadSpeedHistory.Clear();
+        for (var i = history.Count; i < SpeedHistoryCapacity; i++)
+        {
+            _uploadSpeedHistory.Enqueue(0);
+            _downloadSpeedHistory.Enqueue(0);
+        }
+
+        foreach (var sample in history.TakeLast(SpeedHistoryCapacity))
+        {
+            _uploadSpeedHistory.Enqueue(sample.UploadSpeed);
+            _downloadSpeedHistory.Enqueue(sample.DownloadSpeed);
+        }
+    }
+
     private void SeedZeroHistory()
     {
         _uploadSpeedHistory.Clear();
@@ -1261,20 +1222,11 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         {
             _localization.LanguageChanged -= OnLanguageChanged;
         }
+        _systemProxyService.StatusChanged -= OnSystemProxyStatusChanged;
 
         var cancellation = _refreshCancellation;
         _refreshCancellation = null;
         cancellation?.Cancel();
-        // 短暂等待后台操作响应取消，避免销毁过程中触发 toast
-        if (_isServiceModeBusy || _isCoreUpdating || _isCoreRestarting)
-        {
-            // 超时未取得信号量时不得 Release，否则持有者释放时抛 SemaphoreFullException
-            if (_systemProxyApplyLock.Wait(200))
-            {
-                _systemProxyApplyLock.Release();
-            }
-            Thread.Sleep(50);
-        }
         cancellation?.Dispose();
     }
 }

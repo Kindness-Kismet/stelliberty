@@ -39,6 +39,23 @@
       <Border Classes="settings-inline-row">
         <Grid ColumnDefinitions="*,Auto">
           <StackPanel Grid.Column="0" Spacing="3">
+            <TextBlock Classes="settings-row-title"
+                       AutomationProperties.AutomationId="Settings.LightweightModeText"
+                       Text="{Binding AppBehavior.LightweightModeText}" />
+            <TextBlock Classes="settings-row-subtitle"
+                       AutomationProperties.AutomationId="Settings.LightweightModeDescriptionText"
+                       Text="{Binding AppBehavior.LightweightModeDescriptionText}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <ToggleSwitch Grid.Column="1"
+                        AutomationProperties.AutomationId="Settings.LightweightModeToggle"
+                        IsChecked="{Binding AppBehavior.IsLightweightModeEnabled, Mode=TwoWay}" />
+        </Grid>
+      </Border>
+      <Border Classes="settings-row-divider" />
+      <Border Classes="settings-inline-row">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" Spacing="3">
             <TextBlock Classes="settings-row-title" Text="{Binding AppBehavior.TrayDoubleClickText}" />
             <TextBlock Classes="settings-row-subtitle"
                        AutomationProperties.AutomationId="Settings.TrayDoubleClickDescriptionText"

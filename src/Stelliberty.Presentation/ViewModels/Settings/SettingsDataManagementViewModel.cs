@@ -558,30 +558,6 @@ public sealed class SettingsDataManagementViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public async Task CreateScheduledWebDavBackupAsync()
-    {
-        if (!IsWebDavBackupEnabled || !IsWebDavConfigured() || !CanRunWebDavOperations)
-        {
-            return;
-        }
-
-        var now = _now();
-        var interval = TimeSpan.FromHours(Math.Max(1, _settings.WebDavBackupIntervalHours));
-        if (_settings.LastWebDavBackupTime is not null && now - _settings.LastWebDavBackupTime < interval)
-        {
-            return;
-        }
-
-        LastOperation = "WebDavScheduledBackup";
-        if (await ApplyWebDavAsync(
-                settings => _webDavService!.CreateBackupAsync(settings, CancellationToken.None),
-                _localization.GetString("Settings.Data.WebDav.Toast.BackupCreated")))
-        {
-            _settings.LastWebDavBackupTime = now;
-            _settingsStore?.Save(_settings);
-        }
-    }
-
     public async Task RestoreWebDavBackupAsync(string? fileName)
     {
         var item = FindWebDavBackupItem(fileName);
@@ -902,13 +878,6 @@ public sealed class SettingsDataManagementViewModel : ViewModelBase, IDisposable
             WebDavUserName,
             WebDavPassword,
             Math.Max(1, _settings.WebDavBackupRetentionCount));
-    }
-
-    private bool IsWebDavConfigured()
-    {
-        return !string.IsNullOrWhiteSpace(WebDavUrl)
-            && !string.IsNullOrWhiteSpace(WebDavUserName)
-            && !string.IsNullOrWhiteSpace(WebDavPassword);
     }
 
     private void SetSetting<T>(T currentValue, T nextValue, Action<T> assign, [CallerMemberName] string? propertyName = null)

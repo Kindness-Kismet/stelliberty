@@ -139,23 +139,28 @@ Notes:
 
 ### Architecture
 
-Modular monolith + Clean Architecture + MVVM.
+Modular layers + Clean Architecture + MVVM, with separate tray and UI host processes.
 
 ```
-src/Stelliberty.Desktop         Avalonia host, windows, platform services
+src/Stelliberty.Tray            Persistent tray host, core lifecycle, background tasks
+src/Stelliberty.Desktop         On-demand Avalonia UI host, windows, UI platform services
 src/Stelliberty.Presentation    ViewModels, UI state, command bindings
 src/Stelliberty.Application     Use cases, service & capability interfaces
 src/Stelliberty.Domain          Entities, value objects, domain rules
-src/Stelliberty.Infrastructure  File system, persistence, external services
+src/Stelliberty.Infrastructure  File system, persistence, external services, IPC transport and clients
 src/Stelliberty.Native          C# wrappers over the native FFI layer
 native/hub                      Native library: config override, parsing, capabilities
 native/service                  Service mode
 scripts/                        build.py · prebuild.py · test.py
 ```
 
-Dependency direction: `Desktop → Presentation → Application → Domain`
+Dependency directions: `Desktop → Presentation → Application → Domain` and `Tray → Application → Domain`.
 
 `Infrastructure` and `Native` implement interfaces defined by `Application`; `Application` has no dependency on desktop, Avalonia, or FFI details.
+
+The public entry point, `stelliberty.exe`, owns the tray, core runtime, system proxy, service mode, global shortcuts, and background scheduling. It launches `data/deps/stelliberty_ui.exe` through an authenticated session when a window is needed. Other desktop platforms use the corresponding executable names without `.exe`.
+
+Opening the window again reuses the active UI session. By default, hiding to the tray keeps the UI process alive. Lightweight Mode releases the UI process when hidden and creates a new session when reopened; the background runtime continues in both modes. Full application exit is coordinated by the tray. Startup integration, installers, and elevated restarts all use the tray entry point, and `scripts/build.py` packages both hosts together.
 
 Prohibited:
 
@@ -310,14 +315,16 @@ Pull Requests must target `beta`. Direct Pull Requests to `stable` are prohibite
 
 | Check | Description |
 |---|---|
-| Debug commands | New or modified business logic must be wrapped as debug commands under `src/Stelliberty.Desktop/Debug` |
+| Debug commands | Maintain UI commands under `src/Stelliberty.Desktop/Debug` and tray lifecycle commands under `src/Stelliberty.Tray/Debug` |
 | Control IDs | New interactive controls must have `AutomationProperties.AutomationId` set |
 | Test coverage | Pure business logic uses `Pre-build Tests`; packaged app behavior uses `Post-build Tests` |
 | Formatting | C#: `dotnet format`, Rust: `cargo fmt` |
 
 ### Debug Command Requirements
 
-Debug commands are wrapped under `src/Stelliberty.Desktop/Debug` and invoked through the debug control port. When business logic changes, add or update the corresponding `Debug/Commands/*.cs` implementation.
+UI commands are wrapped under `src/Stelliberty.Desktop/Debug` and invoked through the debug control port, which exists only while the UI process is running. Tray lifecycle commands live under `src/Stelliberty.Tray/Debug` and use IPC. Keep the local app-debug skill in sync with the affected host; use its `tray.*` commands to inspect background state, open the UI, or verify UI crash recovery.
+
+The local skill also provides `tray.copy-terminal` to verify clipboard access while the UI is closed. It requires a running core and reports failures to the caller. Both local skill copies remain outside Git tracking.
 
 ### Control ID Requirements
 
