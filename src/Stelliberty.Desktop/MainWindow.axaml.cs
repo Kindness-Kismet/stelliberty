@@ -721,6 +721,24 @@ public sealed partial class MainWindow : Window
         BeginShutdown(shouldShutdownTray: false);
     }
 
+    internal void HideToBackground()
+    {
+        if (_isShutdownRequested || _isShutdownPreparing)
+        {
+            return;
+        }
+
+        _windowStateService.SaveNow();
+        if (DataContext is MainWindowViewModel { AppBehavior.IsLightweightModeEnabled: true })
+        {
+            RequestUiShutdown();
+        }
+        else
+        {
+            Hide();
+        }
+    }
+
     private void BeginShutdown(bool shouldShutdownTray)
     {
         if (_isShutdownRequested || _isShutdownPreparing)
@@ -761,7 +779,7 @@ public sealed partial class MainWindow : Window
             if (DataContext is MainWindowViewModel { AppBehavior.IsMinimizeToTrayEnabled: true }
                 && CanExitToBackground)
             {
-                RequestUiShutdown();
+                HideToBackground();
             }
             else
             {

@@ -88,7 +88,7 @@ class PostBuildTests:
             self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=false"]),
             self.require("window.state", contains=["visible=true"]),
         ))
-        self.step("Recreate UI through the tray shortcut after recording", self.verify_hotkey_session_recreation)
+        self.step("Toggle UI through the tray shortcut after recording", self.verify_window_shortcut)
         self.step("Restore shortcut setting", self.restore_window_shortcut)
         self.step("Close app after shortcut verification", self.stop_app_step)
 
@@ -497,19 +497,24 @@ class PostBuildTests:
             time.sleep(0.2)
         raise PostBuildTestError("UI session remained registered after closing the window")
 
-    def verify_hotkey_session_recreation(self) -> None:
+    def verify_window_shortcut(self) -> None:
         self.require("control.click Navigation.HomeButton")
         time.sleep(0.6)
+        lightweight_mode = self.state_value(self.require("settings.app-behavior.state"), "lightweightMode") == "true"
         before = self.tray_command("state")
         self.command("hotkey.trigger window", allow_disconnect=True)
-        self.wait_ui_closed()
+        if lightweight_mode:
+            self.wait_ui_closed()
+        else:
+            self.wait_for("window.state", contains=["visible=false"], timeout=15, interval=0.1)
         time.sleep(0.6)
         if not self.tray_command("toggle-window"):
             raise PostBuildTestError("The tray shortcut could not reopen the UI")
         self.wait_debug_ready()
         after = self.tray_command("state")
-        if before["TrayPid"] != after["TrayPid"] or before["UiPid"] == after["UiPid"]:
-            raise PostBuildTestError("The shortcut did not recreate only the UI process")
+        ui_recreated = before["UiPid"] != after["UiPid"]
+        if before["TrayPid"] != after["TrayPid"] or ui_recreated != lightweight_mode:
+            raise PostBuildTestError("The shortcut did not follow the lightweight mode preference")
 
     def try_probe_port(self) -> bool:
         try:

@@ -421,7 +421,7 @@ public sealed partial class App : Avalonia.Application
         {
             if (mainWindow.CanExitToBackground)
             {
-                mainWindow.RequestUiShutdown();
+                mainWindow.HideToBackground();
             }
             else
             {

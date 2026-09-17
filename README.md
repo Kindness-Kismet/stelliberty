@@ -160,7 +160,7 @@ Dependency directions: `Desktop → Presentation → Application → Domain` and
 
 The public entry point, `stelliberty.exe`, owns the tray, core runtime, system proxy, service mode, global shortcuts, and background scheduling. It launches `data/deps/stelliberty_ui.exe` through an authenticated session when a window is needed. Other desktop platforms use the corresponding executable names without `.exe`.
 
-Opening the window again reuses the active UI session. Closing to the tray exits the UI process; closing or crashing the UI keeps the background runtime alive. Full application exit is coordinated by the tray. Startup integration, installers, and elevated restarts all use the tray entry point, and `scripts/build.py` packages both hosts together.
+Opening the window again reuses the active UI session. By default, hiding to the tray keeps the UI process alive. Lightweight Mode releases the UI process when hidden and creates a new session when reopened; the background runtime continues in both modes. Full application exit is coordinated by the tray. Startup integration, installers, and elevated restarts all use the tray entry point, and `scripts/build.py` packages both hosts together.
 
 Prohibited:
 

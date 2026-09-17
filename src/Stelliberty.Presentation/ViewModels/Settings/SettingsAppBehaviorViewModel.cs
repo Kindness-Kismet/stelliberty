@@ -46,6 +46,10 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
 
     public string MinimizeToTrayText => _localization.GetString("Settings.AppBehavior.MinimizeToTray");
 
+    public string LightweightModeText => _localization.GetString("Settings.AppBehavior.LightweightMode");
+
+    public string LightweightModeDescriptionText => _localization.GetString("Settings.AppBehavior.LightweightMode.Description");
+
     public string TrayDoubleClickText => _localization.GetString("Settings.AppBehavior.TrayDoubleClick");
 
     public string TrayDoubleClickDescriptionText => _localization.GetString("Settings.AppBehavior.TrayDoubleClick.Description");
@@ -74,6 +78,7 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
     [
         SilentStartText,
         MinimizeToTrayText,
+        LightweightModeText,
         TrayDoubleClickText,
         LazyModeText,
         TitleBarFpsText,
@@ -93,6 +98,12 @@ public sealed class SettingsAppBehaviorViewModel : ViewModelBase, IDisposable
     {
         get => _settings.IsMinimizeToTrayEnabled;
         set => Apply(_settings.IsMinimizeToTrayEnabled, value, next => _settings.IsMinimizeToTrayEnabled = next);
+    }
+
+    public bool IsLightweightModeEnabled
+    {
+        get => _settings.IsLightweightModeEnabled;
+        set => Apply(_settings.IsLightweightModeEnabled, value, next => _settings.IsLightweightModeEnabled = next);
     }
 
     public bool IsLazyModeEnabled

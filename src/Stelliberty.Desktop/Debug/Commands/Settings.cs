@@ -74,6 +74,7 @@ internal static partial class DebugCommands
             $"windowEffect={viewModel.Theme.SelectedWindowEffect}",
             $"silentStart={Bool(viewModel.AppBehavior.IsSilentStartEnabled)}",
             $"minimizeToTray={Bool(viewModel.AppBehavior.IsMinimizeToTrayEnabled)}",
+            $"lightweightMode={Bool(viewModel.AppBehavior.IsLightweightModeEnabled)}",
             $"trayDoubleClick={Bool(viewModel.AppBehavior.IsTrayDoubleClickEnabled)}",
             $"lazyMode={Bool(viewModel.AppBehavior.IsLazyModeEnabled)}",
             $"titleBarFps={Bool(viewModel.AppBehavior.IsTitleBarFpsVisible)}",
@@ -102,6 +103,7 @@ internal static partial class DebugCommands
         return string.Join(";", [
             $"silentStart={Bool(behavior.IsSilentStartEnabled)}",
             $"minimizeToTray={Bool(behavior.IsMinimizeToTrayEnabled)}",
+            $"lightweightMode={Bool(behavior.IsLightweightModeEnabled)}",
             $"trayDoubleClick={Bool(behavior.IsTrayDoubleClickEnabled)}",
             $"lazyMode={Bool(behavior.IsLazyModeEnabled)}",
             $"titleBarFps={Bool(behavior.IsTitleBarFpsVisible)}",
@@ -674,6 +676,7 @@ internal static partial class DebugCommands
         [
             "silent-start",
             "minimize-to-tray",
+            "lightweight-mode",
             "tray-double-click",
             "lazy-mode",
             "titlebar-fps",
@@ -695,6 +698,7 @@ internal static partial class DebugCommands
         {
             case "silent-start": behavior.IsSilentStartEnabled = ParseBool(normalizedValue); break;
             case "minimize-to-tray": behavior.IsMinimizeToTrayEnabled = ParseBool(normalizedValue); break;
+            case "lightweight-mode": behavior.IsLightweightModeEnabled = ParseBool(normalizedValue); break;
             case "tray-double-click": behavior.IsTrayDoubleClickEnabled = ParseBool(normalizedValue); break;
             case "lazy-mode": behavior.IsLazyModeEnabled = ParseBool(normalizedValue); break;
             case "titlebar-fps": behavior.IsTitleBarFpsVisible = ParseBool(normalizedValue); break;
