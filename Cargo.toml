@@ -8,6 +8,8 @@ resolver = "3"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+# MSVC 链接带导出的 DLL 时必然打印导入库生成消息，无告警价值
+linker_messages = "allow"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

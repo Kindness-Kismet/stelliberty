@@ -174,7 +174,7 @@ public sealed partial class App : Avalonia.Application
             ISubscriptionProviderUploader subscriptionProviderUploader = new FileSubscriptionProviderUploader(platformDirectories.CoreDirectory);
             ISubscriptionFileOpener subscriptionFileOpener = new DesktopSubscriptionFileOpener(subscriptionStore.GetContentPath);
             IOverrideFileOpener overrideFileOpener = new DesktopOverrideFileOpener(overrideStore.GetContentPath);
-            var clipboardWriter = new DesktopClipboardWriter(desktop);
+            var clipboardWriter = new DesktopClipboardWriter();
             var chainProxyContextLoader = new SubscriptionChainProxyContextLoader(subscriptionStore, new HubOverrideEngine(), overrideStore);
             var subscriptionPage = new SubscriptionPageViewModel(
                 subscriptionDeleter,
@@ -367,6 +367,7 @@ public sealed partial class App : Avalonia.Application
             {
                 DataContext = viewModel
             };
+            clipboardWriter.Attach(mainWindow);
             mainWindow.PrepareShutdownAsync = async () =>
             {
                 StopBackgroundServices();
@@ -388,7 +389,14 @@ public sealed partial class App : Avalonia.Application
                 await Task.Run(HubBootstrap.Shutdown);
                 AppLogger.Info($"Normal-mode hub shutdown completed: elapsed={Stopwatch.GetElapsedTime(hubStopStartedAt).TotalMilliseconds:0}ms");
             };
-            mainWindow.OsShutdownDetected = () => Interlocked.Exchange(ref _isOsShutdownRequested, 1);
+            // 关机窗口内服务核心先于应用被系统终止，置位期间不再转发核心状态；关机取消则复位。
+            void ApplyOsShutdownDetected(bool isDetected)
+            {
+                Interlocked.Exchange(ref _isOsShutdownRequested, isDetected ? 1 : 0);
+                coreManager.SetShutdownSuspension(isDetected);
+            }
+
+            mainWindow.OsShutdownDetected = () => ApplyOsShutdownDetected(true);
 #if DEBUG
             LogStartupTrace("Main window constructed and bound", startupStartedAt);
 #endif
@@ -403,11 +411,6 @@ public sealed partial class App : Avalonia.Application
             }
             else
             {
-                // --minimized：启动即最小化（调试拉起、开机自启）；静默启动优先级更高。
-                if (IsStartMinimizedRequested(desktop))
-                {
-                    mainWindow.WindowState = WindowState.Minimized;
-                }
                 desktop.MainWindow = mainWindow;
             }
 
@@ -444,7 +447,7 @@ public sealed partial class App : Avalonia.Application
             // 兜底系统关机/注销：用户未主动退出时同步清理系统代理，避免残留失效端口。
             _sessionEndCleanup = new SessionEndCleanupService(
                 viewModel.HomePage.DisableSystemProxyOnShutdown,
-                isDetected => Interlocked.Exchange(ref _isOsShutdownRequested, isDetected ? 1 : 0));
+                ApplyOsShutdownDetected);
             _sessionEndCleanup.Start();
             _trayService.Attach(desktop, mainWindow, viewModel, localization);
             foreach (var (action, gesture) in new[]
@@ -489,11 +492,6 @@ public sealed partial class App : Avalonia.Application
     private static bool ShouldStartHidden(AppSettings settings)
     {
         return settings.IsSilentStartEnabled;
-    }
-
-    private static bool IsStartMinimizedRequested(IClassicDesktopStyleApplicationLifetime desktop)
-    {
-        return desktop.Args?.Contains("--minimized", StringComparer.OrdinalIgnoreCase) == true;
     }
 
     private void StopBackgroundServices()

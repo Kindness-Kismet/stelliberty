@@ -1,12 +1,17 @@
-using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Stelliberty.Application.Diagnostics;
 using Stelliberty.Application.Platform;
 
 namespace Stelliberty.Desktop.Services;
 
-public sealed class DesktopClipboardWriter(IClassicDesktopStyleApplicationLifetime desktop) : IClipboardWriter
+internal sealed class DesktopClipboardWriter : IClipboardWriter
 {
+    private Window? _window;
+
+    // 静默启动的主窗口不进桌面生命周期，剪贴板只能挂在窗口实例上。
+    public void Attach(Window window) => _window = window;
+
     public void WriteText(string text)
     {
         // 剪贴板占用可能很短；异步写入避免卡住 UI 线程。
@@ -17,13 +22,15 @@ public sealed class DesktopClipboardWriter(IClassicDesktopStyleApplicationLifeti
     {
         try
         {
-            var clipboard = desktop.MainWindow?.Clipboard;
+            var clipboard = _window?.Clipboard;
             if (clipboard is null)
             {
+                AppLogger.Warning("Clipboard write skipped: window clipboard unavailable");
                 return;
             }
 
             await clipboard.SetTextAsync(text);
+            AppLogger.Debug($"Clipboard text written: length={text.Length}");
         }
         catch (Exception exception)
         {

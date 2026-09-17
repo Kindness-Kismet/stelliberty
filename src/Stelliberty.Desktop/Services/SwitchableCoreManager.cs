@@ -11,6 +11,7 @@ internal sealed class SwitchableCoreManager : ICoreManager, IDisposable, IAsyncD
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ICoreManager _current;
     private volatile bool _isDisposalRequested;
+    private volatile bool _isShutdownSuspended;
     private bool _isDisposed;
 
     public SwitchableCoreManager(ICoreManager initial)
@@ -82,6 +83,18 @@ internal sealed class SwitchableCoreManager : ICoreManager, IDisposable, IAsyncD
         finally
         {
             _gate.Release();
+        }
+    }
+
+    // 系统关机窗口内服务核心会先被终止，其状态变化不再转发；关机取消时由调用方复位。
+    // 不取 _gate：关机来自窗口消息线程，不得阻塞在在途核心操作上。
+    public void SetShutdownSuspension(bool isSuspended)
+    {
+        _isShutdownSuspended = isSuspended;
+        // 与 ReplaceCore 并发时可能读到旧核心，切换后由 Attach 再次同步抑制状态。
+        if (Volatile.Read(ref _current) is ServiceModeCoreManager serviceModeCoreManager)
+        {
+            serviceModeCoreManager.SetShutdownSuspension(isSuspended);
         }
     }
 
@@ -178,12 +191,12 @@ internal sealed class SwitchableCoreManager : ICoreManager, IDisposable, IAsyncD
     {
         var previous = _current;
         Detach(previous);
-        _current = next;
+        Volatile.Write(ref _current, next);
         Attach(next);
         DisposeCore(previous);
         try
         {
-            StateChanged?.Invoke(this, snapshot);
+            OnStateChanged(this, snapshot);
         }
         catch (Exception exception)
         {
@@ -210,6 +223,11 @@ internal sealed class SwitchableCoreManager : ICoreManager, IDisposable, IAsyncD
     {
         core.StateChanged += OnStateChanged;
         core.CoreLogReceived += OnCoreLogReceived;
+        // 关机置位与切换并发时抑制可能落在旧核心上，接管新核心时补齐。
+        if (_isShutdownSuspended && core is ServiceModeCoreManager serviceModeCoreManager)
+        {
+            serviceModeCoreManager.SetShutdownSuspension(true);
+        }
     }
 
     private void Detach(ICoreManager core)
@@ -220,6 +238,11 @@ internal sealed class SwitchableCoreManager : ICoreManager, IDisposable, IAsyncD
 
     private void OnStateChanged(object? sender, CoreSnapshot snapshot)
     {
+        if (_isShutdownSuspended)
+        {
+            return;
+        }
+
         StateChanged?.Invoke(this, snapshot);
     }
 

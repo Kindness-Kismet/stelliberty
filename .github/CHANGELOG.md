@@ -1,11 +1,7 @@
-- Applying config changes in service mode now reloads the core in place, so proxies no longer drop for a few seconds on subscription updates and setting changes
-- Fixed service-mode core status briefly showing as unavailable while the core kept running, which also caused unnecessary proxy selection reloads
-- Fixed a race during app shutdown that could crash the app while disposing the service-mode core client
-- Added a --minimized startup flag that launches the app with the main window minimized
+- Fixed an issue with copying terminal proxy commands from the tray that previously caused copying to fail while the main window stayed hidden after silent startup
+- Fixed an issue with service-mode core status that previously caused false error reports during system shutdown or sign-out
 
 ---
 
-- 服务模式下应用配置变更改为原地重载核心，更新订阅或修改设置时代理节点不再短暂丢失
-- 修复了服务模式下核心仍在运行时状态短暂显示为不可用的问题，该问题此前还会引发多余的代理选择重载
-- 修复了应用退出时服务模式核心客户端释放竞态可能导致崩溃的问题
-- 新增了 --minimized 启动参数，现在可以让应用以主窗口最小化的方式启动
+- 修复了关于托盘复制终端代理命令的错误，该问题曾导致静默启动后主窗口隐藏时无法复制命令
+- 修复了关于服务模式核心状态的错误，该问题曾导致系统关机或注销期间状态误报异常

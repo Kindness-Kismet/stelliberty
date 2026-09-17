@@ -26,6 +26,7 @@ internal sealed class ServiceModeCoreManager : ICoreManager, IDisposable
     private CancellationTokenSource? _monitorCancellation;
     private Task? _monitorTask;
     private CoreSnapshot? _lastSnapshot;
+    private volatile bool _isShutdownSuspended;
     private bool _isDisposed;
 
     public ServiceModeCoreManager(
@@ -45,6 +46,16 @@ internal sealed class ServiceModeCoreManager : ICoreManager, IDisposable
     public event EventHandler<CoreSnapshot>? StateChanged;
 
     public event EventHandler<CoreLogMessage>? CoreLogReceived;
+
+    // 关机窗口内核心被系统终止会被服务记成崩溃，停掉轮询避免观测到这个瞬态。
+    public void SetShutdownSuspension(bool isSuspended)
+    {
+        _isShutdownSuspended = isSuspended;
+        if (isSuspended)
+        {
+            StopStatusMonitor();
+        }
+    }
 
     public void Dispose()
     {
@@ -167,14 +178,14 @@ internal sealed class ServiceModeCoreManager : ICoreManager, IDisposable
 
     private void StartStatusMonitor()
     {
-        if (_isDisposed)
+        if (_isDisposed || _isShutdownSuspended)
         {
             return;
         }
 
         lock (_monitorGate)
         {
-            if (_isDisposed || _monitorCancellation is not null)
+            if (_isDisposed || _isShutdownSuspended || _monitorCancellation is not null)
             {
                 return;
             }
@@ -347,7 +358,7 @@ internal sealed class ServiceModeCoreManager : ICoreManager, IDisposable
 
     private void PublishSnapshot(CoreSnapshot snapshot)
     {
-        if (_isDisposed)
+        if (_isDisposed || _isShutdownSuspended)
         {
             return;
         }
