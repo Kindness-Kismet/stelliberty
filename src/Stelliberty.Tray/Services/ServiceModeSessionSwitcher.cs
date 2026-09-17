@@ -13,7 +13,7 @@ internal sealed class ServiceModeSessionSwitcher(
     Func<CancellationToken, Task<CoreHostOperationResult>> resumeNormalCore,
     Func<ServiceModeStatus, CancellationToken, Task<CoreHostOperationResult>> startServiceCore,
     Action<bool> setServiceModeCoreHostActive,
-    bool isServiceModeActive = false) : IDisposable
+    bool isServiceModeActive = false) : IAsyncDisposable
 {
     private readonly object _lifetimeGate = new();
     private readonly SemaphoreSlim _operationGate = new(1, 1);
@@ -88,7 +88,7 @@ internal sealed class ServiceModeSessionSwitcher(
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         lock (_lifetimeGate)
         {
@@ -101,32 +101,9 @@ internal sealed class ServiceModeSessionSwitcher(
             _lifetimeCancellation.Cancel();
         }
 
-        // 同步等待在途操作释放信号量，确保取消令牌不被使用中释放。
-        _operationGate.Wait();
+        // 等待在途操作结束后再释放其取消令牌。
+        await _operationGate.WaitAsync().ConfigureAwait(false);
         _lifetimeCancellation.Dispose();
-    }
-
-    public bool TryDisposeForShutdown()
-    {
-        lock (_lifetimeGate)
-        {
-            if (_isDisposed)
-            {
-                return true;
-            }
-
-            _isDisposed = true;
-            _lifetimeCancellation.Cancel();
-        }
-
-        // 退出事件不得再次等待已经超时的模式切换，未完成资源随进程回收。
-        if (!_operationGate.Wait(0))
-        {
-            return false;
-        }
-
-        _lifetimeCancellation.Dispose();
-        return true;
     }
 
     private async Task<ServiceModeOperationResult> RunOperationAsync(

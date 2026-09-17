@@ -21,12 +21,6 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     private readonly IClipboardWriter? _clipboardWriter;
     private readonly ISystemProxyController _systemProxyService;
     private readonly IServiceModeManager? _serviceModeManager;
-    private readonly Func<bool> _isServiceModeCoreHostActive;
-    private readonly Func<CancellationToken, Task<ServiceModeOperationResult>>? _serviceModeSessionActivator;
-    private readonly Func<CancellationToken, Task<ServiceModeOperationResult>>? _serviceModeSessionDeactivator;
-    private readonly Action? _serviceModeCoreTransitionStarting;
-    private readonly Func<CancellationToken, Task>? _serviceModeCoreTransitionCompleted;
-    private readonly bool _serviceModeCoreHostManagedExternally;
     private readonly Func<SystemProxyApplicationRequest> _systemProxyRequestFactory;
     private readonly Action<bool>? _tunStateChanged;
 
@@ -87,7 +81,6 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         ISystemProxyController systemProxyService,
         Func<SystemProxyApplicationRequest> systemProxyRequestFactory,
         IServiceModeManager? serviceModeManager = null,
-        Func<bool>? isServiceModeCoreHostActive = null,
         Action<bool>? tunStateChanged = null,
         INetworkConnectionProbe? networkProbe = null,
         IProxyCoreClient? proxyClient = null,
@@ -101,12 +94,7 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         ServiceModeStatus? initialServiceModeStatus = null,
         ILocalizationService? localization = null,
         SystemProxyPlatform systemPlatform = SystemProxyPlatform.Other,
-        IClipboardWriter? clipboardWriter = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionActivator = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionDeactivator = null,
-        Action? serviceModeCoreTransitionStarting = null,
-        Func<CancellationToken, Task>? serviceModeCoreTransitionCompleted = null,
-        bool serviceModeCoreHostManagedExternally = false)
+        IClipboardWriter? clipboardWriter = null)
     {
         _localization = localization;
         _systemPlatform = systemPlatform;
@@ -114,12 +102,6 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         _systemProxyService = systemProxyService;
         _systemProxyService.StatusChanged += OnSystemProxyStatusChanged;
         _serviceModeManager = serviceModeManager;
-        _isServiceModeCoreHostActive = isServiceModeCoreHostActive ?? (() => serviceModeManager is not null);
-        _serviceModeSessionActivator = serviceModeSessionActivator;
-        _serviceModeSessionDeactivator = serviceModeSessionDeactivator;
-        _serviceModeCoreTransitionStarting = serviceModeCoreTransitionStarting;
-        _serviceModeCoreTransitionCompleted = serviceModeCoreTransitionCompleted;
-        _serviceModeCoreHostManagedExternally = serviceModeCoreHostManagedExternally;
         _systemProxyRequestFactory = systemProxyRequestFactory;
         _tunStateChanged = tunStateChanged;
         _coreRestart = coreRestart;
@@ -898,83 +880,14 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         _isServiceModeBusy = true;
         RaiseHomeStateChanged();
         var token = cancellationToken.CanBeCanceled ? cancellationToken : _refreshCancellation?.Token ?? CancellationToken.None;
-        var shouldDeactivateSession = !installOrUpdate && IsServiceModeCoreHostActive;
         ServiceModeOperationResult result;
-        var sessionActivationFailed = false;
-        var sessionDeactivationFailed = false;
-        var sessionTransitionHandled = false;
         try
         {
-            _serviceModeCoreTransitionStarting?.Invoke();
             result = installOrUpdate
                 ? await _serviceModeManager.InstallOrUpdateAsync(token)
                 : await _serviceModeManager.UninstallAsync(token);
 
-            if (installOrUpdate && result.IsSuccess && _serviceModeSessionActivator is not null)
-            {
-                try
-                {
-                    var activation = await _serviceModeSessionActivator(token);
-                    sessionTransitionHandled = true;
-                    if (activation.IsSuccess)
-                    {
-                        result = activation;
-                    }
-                    else
-                    {
-                        sessionActivationFailed = true;
-                        result = activation;
-                        AppLogger.Warning($"Service mode was installed but session activation failed: {activation.Message}");
-                    }
-                }
-                catch (OperationCanceledException exception) when (token.IsCancellationRequested)
-                {
-                    sessionActivationFailed = true;
-                    result = ServiceModeOperationResult.Canceled(exception.Message);
-                }
-                catch (Exception exception)
-                {
-                    sessionActivationFailed = true;
-                    result = ServiceModeOperationResult.Failed(exception.Message);
-                    AppLogger.Warning($"Service mode was installed but session activation failed: {exception.Message}");
-                }
-            }
-
-            if (shouldDeactivateSession && result.IsSuccess && _serviceModeSessionDeactivator is not null)
-            {
-                try
-                {
-                    var deactivation = await _serviceModeSessionDeactivator(token);
-                    sessionTransitionHandled = true;
-                    sessionDeactivationFailed = !deactivation.IsSuccess;
-                    result = deactivation;
-                    if (sessionDeactivationFailed)
-                    {
-                        AppLogger.Warning($"Service mode was uninstalled but normal session activation failed: {deactivation.Message}");
-                    }
-                }
-                catch (OperationCanceledException exception) when (token.IsCancellationRequested)
-                {
-                    sessionDeactivationFailed = true;
-                    result = ServiceModeOperationResult.Canceled(exception.Message);
-                }
-                catch (Exception exception)
-                {
-                    sessionDeactivationFailed = true;
-                    result = ServiceModeOperationResult.Failed(exception.Message);
-                    AppLogger.Warning($"Service mode was uninstalled but normal session activation failed: {exception.Message}");
-                }
-            }
-
-            if (sessionActivationFailed)
-            {
-                RaiseToast(Localize("Home.Toast.ServiceModeActivationFailed"), ToastType.Warning);
-            }
-            else if (sessionDeactivationFailed)
-            {
-                RaiseToast(Localize("Home.Toast.ServiceModeSessionRecoveryFailed"), ToastType.Warning);
-            }
-            else if (result.IsCanceled)
+            if (result.IsCanceled)
             {
                 RaiseToast(Localize("Home.Toast.ServiceModeOperationCanceled"), ToastType.Info);
             }
@@ -1010,18 +923,6 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         {
             _isServiceModeBusy = false;
             _lastServiceModeProbe = null;
-            if (!sessionTransitionHandled && _serviceModeCoreTransitionCompleted is not null)
-            {
-                try
-                {
-                    await _serviceModeCoreTransitionCompleted(CancellationToken.None);
-                }
-                catch (Exception exception)
-                {
-                    AppLogger.Warning($"Service mode core transition completion failed: {exception.Message}");
-                }
-            }
-
             try
             {
                 await RefreshServiceModeAsync(token);
@@ -1046,9 +947,7 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         RaiseHomeStateChanged();
     }
 
-    private bool IsServiceModeCoreHostActive => _serviceModeCoreHostManagedExternally
-        ? _serviceModeStatus.IsRunning
-        : _isServiceModeCoreHostActive();
+    private bool IsServiceModeCoreHostActive => _serviceModeStatus.IsRunning;
 
     private Task ApplyServiceModeStatusAsync(ServiceModeStatus status)
     {

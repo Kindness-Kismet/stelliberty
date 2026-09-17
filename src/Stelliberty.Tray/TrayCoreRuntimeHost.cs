@@ -572,7 +572,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
                 {
                     AppLogger.Warning($"Service-mode core shutdown failed: {result.Message}");
                 }
-                _serviceModeSwitcher.Dispose();
+                await _serviceModeSwitcher.DisposeAsync().ConfigureAwait(false);
             }
 
             if (_manager is not null)

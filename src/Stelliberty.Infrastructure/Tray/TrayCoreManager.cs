@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Stelliberty.Infrastructure.Tray;
 using Stelliberty.Application.CoreLogs;
 using Stelliberty.Application.Diagnostics;
 using Stelliberty.Application.Runtime;

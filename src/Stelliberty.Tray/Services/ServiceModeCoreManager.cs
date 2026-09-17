@@ -9,7 +9,7 @@ using Stelliberty.Infrastructure.Proxies;
 
 namespace Stelliberty.Tray;
 
-internal sealed class ServiceModeCoreManager : IReadyCoreManager, IDisposable
+internal sealed class ServiceModeCoreManager : IReadyCoreManager, IAsyncDisposable
 {
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(12);
     private static readonly TimeSpan ReadyPollInterval = TimeSpan.FromMilliseconds(250);
@@ -51,11 +51,11 @@ internal sealed class ServiceModeCoreManager : IReadyCoreManager, IDisposable
         _isShutdownSuspended = isSuspended;
         if (isSuspended)
         {
-            StopStatusMonitor();
+            _ = StopStatusMonitorAsync();
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if (_isDisposed)
         {
@@ -63,7 +63,7 @@ internal sealed class ServiceModeCoreManager : IReadyCoreManager, IDisposable
         }
 
         _isDisposed = true;
-        StopStatusMonitor(waitForExit: true);
+        await StopStatusMonitorAsync(waitForExit: true).ConfigureAwait(false);
         _logStreamer.MessageReceived -= OnLogMessageReceived;
         _logStreamer.Dispose();
         _coreClient.Dispose();
@@ -194,7 +194,7 @@ internal sealed class ServiceModeCoreManager : IReadyCoreManager, IDisposable
     }
 
     // waitForExit 仅用于释放路径：轮询任务持有 _coreClient，必须等它退出后才能释放。
-    private void StopStatusMonitor(bool waitForExit = false)
+    private async Task StopStatusMonitorAsync(bool waitForExit = false)
     {
         CancellationTokenSource? cancellation;
         Task? task;
@@ -214,14 +214,16 @@ internal sealed class ServiceModeCoreManager : IReadyCoreManager, IDisposable
         cancellation.Cancel();
         if (waitForExit && task is not null)
         {
-            // 轮询全程 ConfigureAwait(false)，同步等待不会死锁；取消后至多等一个观测往返。
             try
             {
-                task.Wait(MonitorExitTimeout);
+                await task.WaitAsync(MonitorExitTimeout).ConfigureAwait(false);
             }
-            catch (AggregateException)
+            catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
             {
-                // 轮询自身异常在循环内已记录，释放路径无需再处理。
+            }
+            catch (Exception exception)
+            {
+                AppLogger.Warning($"Service-mode status monitor exit failed: {exception.Message}");
             }
         }
 

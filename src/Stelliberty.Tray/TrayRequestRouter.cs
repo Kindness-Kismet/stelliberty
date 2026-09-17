@@ -14,12 +14,12 @@ internal sealed class TrayRequestRouter : IDisposable
 {
     private readonly TrayLifetime _lifetime;
     private readonly UiSessionManager _uiSessions;
-    private readonly ITrayCoreRuntime? _coreRuntime;
-    private readonly CoreLogJournal? _coreLogs;
-    private readonly ITrayRuntimeMonitor? _runtimeMonitor;
-    private readonly ISystemProxyController? _systemProxy;
-    private readonly ITrayHotkeyRuntime? _hotkeys;
-    private readonly TrayBackgroundTasks? _backgroundTasks;
+    private readonly ITrayCoreRuntime _coreRuntime;
+    private readonly CoreLogJournal _coreLogs;
+    private readonly ITrayRuntimeMonitor _runtimeMonitor;
+    private readonly ISystemProxyController _systemProxy;
+    private readonly ITrayHotkeyRuntime _hotkeys;
+    private readonly TrayBackgroundTasks _backgroundTasks;
     private readonly ConcurrentDictionary<Guid, byte> _handshakes = new();
     private readonly ConcurrentDictionary<Guid, TrayIpcConnection> _connections = new();
     private readonly string _trayEpoch = Guid.NewGuid().ToString("N");
@@ -28,12 +28,12 @@ internal sealed class TrayRequestRouter : IDisposable
     public TrayRequestRouter(
         TrayLifetime lifetime,
         UiSessionManager uiSessions,
-        ITrayCoreRuntime? coreRuntime = null,
-        CoreLogJournal? coreLogs = null,
-        ITrayRuntimeMonitor? runtimeMonitor = null,
-        ISystemProxyController? systemProxy = null,
-        ITrayHotkeyRuntime? hotkeys = null,
-        TrayBackgroundTasks? backgroundTasks = null)
+        ITrayCoreRuntime coreRuntime,
+        CoreLogJournal coreLogs,
+        ITrayRuntimeMonitor runtimeMonitor,
+        ISystemProxyController systemProxy,
+        ITrayHotkeyRuntime hotkeys,
+        TrayBackgroundTasks backgroundTasks)
     {
         _lifetime = lifetime;
         _uiSessions = uiSessions;
@@ -43,25 +43,13 @@ internal sealed class TrayRequestRouter : IDisposable
         _systemProxy = systemProxy;
         _hotkeys = hotkeys;
         _backgroundTasks = backgroundTasks;
-        if (_backgroundTasks is not null)
-        {
-            _backgroundTasks.StateChanged += OnBackgroundChanged;
-        }
-        if (_coreRuntime is not null)
-        {
-            _coreRuntime.StateChanged += OnCoreStateChanged;
-            _coreRuntime.LogReceived += OnCoreLogReceived;
-        }
+        _backgroundTasks.StateChanged += OnBackgroundChanged;
+        _coreRuntime.StateChanged += OnCoreStateChanged;
+        _coreRuntime.LogReceived += OnCoreLogReceived;
 
-        if (_runtimeMonitor is not null)
-        {
-            _runtimeMonitor.Sampled += OnRuntimeSampled;
-        }
+        _runtimeMonitor.Sampled += OnRuntimeSampled;
 
-        if (_systemProxy is not null)
-        {
-            _systemProxy.StatusChanged += OnSystemProxyChanged;
-        }
+        _systemProxy.StatusChanged += OnSystemProxyChanged;
     }
 
     public async Task<TrayIpcResult> HandleAsync(
@@ -80,33 +68,33 @@ internal sealed class TrayRequestRouter : IDisposable
             {
                 TrayProtocol.HelloMethod => HandleHello(connection, request),
                 TrayProtocol.HealthMethod => await HandleHealthAsync(cancellationToken).ConfigureAwait(false),
-                TrayProtocol.BackgroundStatusMethod => TrayIpcResult.Success(_backgroundTasks!.Status),
+                TrayProtocol.BackgroundStatusMethod => TrayIpcResult.Success(_backgroundTasks.Status),
                 TrayProtocol.CoreEnsureStartedMethod => TrayIpcResult.Success(
-                    await RequireCoreRuntime().EnsureStartedAsync(cancellationToken).ConfigureAwait(false)),
+                    await _coreRuntime.EnsureStartedAsync(cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.CoreStopMethod => TrayIpcResult.Success(
-                    await RequireCoreRuntime().StopAsync(cancellationToken).ConfigureAwait(false)),
-                TrayProtocol.CoreSnapshotMethod => TrayIpcResult.Success(RequireCoreRuntime().CurrentStatus),
+                    await _coreRuntime.StopAsync(cancellationToken).ConfigureAwait(false)),
+                TrayProtocol.CoreSnapshotMethod => TrayIpcResult.Success(_coreRuntime.CurrentStatus),
                 TrayProtocol.CoreApplyConfigMethod => TrayIpcResult.Success(
-                    await RequireCoreRuntime().ApplyConfigAsync(
+                    await _coreRuntime.ApplyConfigAsync(
                         request.DeserializeParameters<CoreApplyConfigRequest>(),
                         cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.CoreRestartMethod => await HandleCoreRestartAsync(cancellationToken).ConfigureAwait(false),
                 TrayProtocol.CoreLogsMethod => TrayIpcResult.Success(
-                    RequireCoreLogs().ReadAfter(
+                    _coreLogs.ReadAfter(
                         request.DeserializeParameters<TrayCoreLogsRequest>().AfterSequence)),
-                TrayProtocol.RuntimeSnapshotMethod => TrayIpcResult.Success(RequireRuntimeMonitor().GetSnapshot()),
+                TrayProtocol.RuntimeSnapshotMethod => TrayIpcResult.Success(_runtimeMonitor.GetSnapshot()),
                 TrayProtocol.RuntimeResetTrafficMethod => await HandleRuntimeResetAsync(cancellationToken).ConfigureAwait(false),
                 TrayProtocol.SystemProxyStatusMethod => TrayIpcResult.Success(
-                    await RequireSystemProxy().GetStatusAsync(cancellationToken).ConfigureAwait(false)),
+                    await _systemProxy.GetStatusAsync(cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.SystemProxySetEnabledMethod => await HandleSystemProxySetAsync(
                     request,
                     cancellationToken).ConfigureAwait(false),
                 TrayProtocol.ServiceModeStatusMethod => TrayIpcResult.Success(
-                    await RequireCoreRuntime().GetServiceModeStatusAsync(cancellationToken).ConfigureAwait(false)),
+                    await _coreRuntime.GetServiceModeStatusAsync(cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.ServiceModeInstallMethod => TrayIpcResult.Success(
-                    await RequireCoreRuntime().InstallOrUpdateServiceModeAsync(cancellationToken).ConfigureAwait(false)),
+                    await _coreRuntime.InstallOrUpdateServiceModeAsync(cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.ServiceModeUninstallMethod => TrayIpcResult.Success(
-                    await RequireCoreRuntime().UninstallServiceModeAsync(cancellationToken).ConfigureAwait(false)),
+                    await _coreRuntime.UninstallServiceModeAsync(cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.HotkeyApplyMethod => await HandleHotkeyApplyAsync(request, cancellationToken).ConfigureAwait(false),
                 TrayProtocol.HotkeySetSuppressedMethod => await HandleHotkeySuppressionAsync(
                     connection,
@@ -174,10 +162,7 @@ internal sealed class TrayRequestRouter : IDisposable
     {
         _handshakes.TryRemove(connectionId, out _);
         _connections.TryRemove(connectionId, out _);
-        if (_hotkeys is not null)
-        {
-            await _hotkeys.ReleaseSuppressionAsync(connectionId).ConfigureAwait(false);
-        }
+        await _hotkeys.ReleaseSuppressionAsync(connectionId).ConfigureAwait(false);
         await _uiSessions.OnConnectionClosedAsync(connectionId).ConfigureAwait(false);
     }
 
@@ -198,26 +183,16 @@ internal sealed class TrayRequestRouter : IDisposable
     private async Task<TrayIpcResult> HandleHealthAsync(CancellationToken cancellationToken)
     {
         var ui = await _uiSessions.GetStateAsync(cancellationToken).ConfigureAwait(false);
-        var core = _coreRuntime?.CurrentStatus
-            ?? new TrayCoreStatus(
-                new CoreSnapshot(
-                    CoreState.Unavailable,
-                    null,
-                    string.Empty,
-                    null),
-                0);
         return TrayIpcResult.Success(new TrayHealth(
             Environment.ProcessId,
             _trayEpoch,
             (long)Stopwatch.GetElapsedTime(_startedAt).TotalMilliseconds,
             ui.UiPid,
             ui.IsLaunchPending,
-            core,
-            _coreLogs?.LatestSequence ?? 0,
-            _runtimeMonitor?.GetSnapshot().SampledAt,
-            _systemProxy is null
-                ? new SystemProxyStatus(false, false)
-                : await _systemProxy.GetStatusAsync(cancellationToken).ConfigureAwait(false)));
+            _coreRuntime.CurrentStatus,
+            _coreLogs.LatestSequence,
+            _runtimeMonitor.GetSnapshot().SampledAt,
+            await _systemProxy.GetStatusAsync(cancellationToken).ConfigureAwait(false)));
     }
 
     private async Task<UiRegisterResult> RegisterUiAsync(
@@ -280,70 +255,37 @@ internal sealed class TrayRequestRouter : IDisposable
         AppMetadata.Version,
         Environment.ProcessId,
         _trayEpoch,
-        Capabilities(),
-        _coreRuntime?.CurrentStatus.CoreGeneration ?? 0);
-
-    private string[] Capabilities()
-    {
-        var capabilities = new List<string> { "ui_session", "background_tray" };
-        if (_coreRuntime is not null)
-        {
-            capabilities.AddRange(["core_runtime", "core_log_journal", "runtime_traffic", "service_mode"]);
-        }
-        if (_systemProxy is not null)
-        {
-            capabilities.Add("system_proxy");
-        }
-        if (_hotkeys is not null)
-        {
-            capabilities.Add("global_hotkeys");
-        }
-        return [.. capabilities];
-    }
+        ["ui_session", "background_tray", "core_runtime", "core_log_journal", "runtime_traffic", "service_mode", "system_proxy", "global_hotkeys"],
+        _coreRuntime.CurrentStatus.CoreGeneration);
 
     private async Task<TrayIpcResult> HandleCoreRestartAsync(CancellationToken cancellationToken)
     {
-        var runtime = RequireCoreRuntime();
+        var runtime = _coreRuntime;
         await runtime.RestartAsync(cancellationToken).ConfigureAwait(false);
         return TrayIpcResult.Success(runtime.CurrentStatus);
     }
 
     private async Task<TrayIpcResult> HandleRuntimeResetAsync(CancellationToken cancellationToken)
     {
-        var monitor = RequireRuntimeMonitor();
+        var monitor = _runtimeMonitor;
         await monitor.ResetTrafficAsync(cancellationToken).ConfigureAwait(false);
         return TrayIpcResult.Success(monitor.GetSnapshot());
     }
 
-    private ITrayCoreRuntime RequireCoreRuntime() =>
-        _coreRuntime ?? throw new InvalidOperationException("Tray core runtime is unavailable.");
-
 #if DEBUG
     private async Task<TrayIpcResult> HandleCopyTerminalProxyAsync()
     {
-        await _hotkeys!.CopyTerminalProxyAsync().ConfigureAwait(false);
+        await _hotkeys.CopyTerminalProxyAsync().ConfigureAwait(false);
         return TrayIpcResult.Success(new { });
     }
 #endif
-
-    private CoreLogJournal RequireCoreLogs() =>
-        _coreLogs ?? throw new InvalidOperationException("Tray core log journal is unavailable.");
-
-    private ITrayRuntimeMonitor RequireRuntimeMonitor() =>
-        _runtimeMonitor ?? throw new InvalidOperationException("Tray runtime monitor is unavailable.");
-
-    private ISystemProxyController RequireSystemProxy() =>
-        _systemProxy ?? throw new InvalidOperationException("Tray system proxy runtime is unavailable.");
-
-    private ITrayHotkeyRuntime RequireHotkeys() =>
-        _hotkeys ?? throw new InvalidOperationException("Tray global hotkeys are unavailable.");
 
     private async Task<TrayIpcResult> HandleHotkeyApplyAsync(
         TrayIpcRequest request,
         CancellationToken cancellationToken)
     {
         var parameters = request.DeserializeParameters<TrayHotkeyApplyRequest>();
-        var result = await RequireHotkeys()
+        var result = await _hotkeys
             .ApplyAsync(parameters.Action, parameters.Gesture, cancellationToken)
             .ConfigureAwait(false);
         return TrayIpcResult.Success(result);
@@ -355,7 +297,7 @@ internal sealed class TrayRequestRouter : IDisposable
         CancellationToken cancellationToken)
     {
         var parameters = request.DeserializeParameters<TrayHotkeySuppressionRequest>();
-        await RequireHotkeys()
+        await _hotkeys
             .SetSuppressedAsync(connection.Id, parameters.IsSuppressed, cancellationToken)
             .ConfigureAwait(false);
         return TrayIpcResult.Success(new { applied = true });
@@ -367,7 +309,7 @@ internal sealed class TrayRequestRouter : IDisposable
         CancellationToken cancellationToken)
     {
         var parameters = request.DeserializeParameters<TrayHotkeySimulationRequest>();
-        var activated = await RequireHotkeys()
+        var activated = await _hotkeys
             .SimulateActivationAsync(parameters.Action, cancellationToken)
             .ConfigureAwait(false);
         return TrayIpcResult.Success(activated);
@@ -384,7 +326,7 @@ internal sealed class TrayRequestRouter : IDisposable
             return TrayIpcResult.Error("tray.invalid_params", "Enabling the system proxy requires settings.");
         }
 
-        var result = await RequireSystemProxy().SetEnabledAsync(
+        var result = await _systemProxy.SetEnabledAsync(
             parameters.IsEnabled,
             parameters.Request,
             cancellationToken).ConfigureAwait(false);
@@ -428,25 +370,13 @@ internal sealed class TrayRequestRouter : IDisposable
 
     public void Dispose()
     {
-        if (_backgroundTasks is not null)
-        {
-            _backgroundTasks.StateChanged -= OnBackgroundChanged;
-        }
-        if (_coreRuntime is not null)
-        {
-            _coreRuntime.StateChanged -= OnCoreStateChanged;
-            _coreRuntime.LogReceived -= OnCoreLogReceived;
-        }
+        _backgroundTasks.StateChanged -= OnBackgroundChanged;
+        _coreRuntime.StateChanged -= OnCoreStateChanged;
+        _coreRuntime.LogReceived -= OnCoreLogReceived;
 
-        if (_runtimeMonitor is not null)
-        {
-            _runtimeMonitor.Sampled -= OnRuntimeSampled;
-        }
+        _runtimeMonitor.Sampled -= OnRuntimeSampled;
 
-        if (_systemProxy is not null)
-        {
-            _systemProxy.StatusChanged -= OnSystemProxyChanged;
-        }
+        _systemProxy.StatusChanged -= OnSystemProxyChanged;
 
         _connections.Clear();
         _handshakes.Clear();

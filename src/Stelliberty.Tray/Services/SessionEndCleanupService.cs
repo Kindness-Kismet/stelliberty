@@ -126,6 +126,7 @@ public sealed class SessionEndCleanupService(Action cleanup, Action<bool>? shutd
             return null;
         }
 
+        // 会话窗口自持消息循环，创建与销毁必须在同一线程。
         private void RunMessageLoop()
         {
             _instance = GetModuleHandle(null);

@@ -1,6 +1,5 @@
 using Stelliberty.Application.Proxies;
 using System.Text.Json;
-using Stelliberty.Infrastructure.Tray;
 using Stelliberty.Application.Platform;
 using Stelliberty.Application.Runtime;
 using Stelliberty.Infrastructure.Core;

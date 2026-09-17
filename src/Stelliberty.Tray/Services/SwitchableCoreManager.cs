@@ -4,7 +4,7 @@ using Stelliberty.Application.Runtime;
 using Stelliberty.Domain.CoreLogs;
 namespace Stelliberty.Tray;
 
-public sealed class SwitchableCoreManager : IReadyCoreManager, IDisposable, IAsyncDisposable
+public sealed class SwitchableCoreManager : IReadyCoreManager, IAsyncDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ICoreManager _current;
@@ -57,12 +57,6 @@ public sealed class SwitchableCoreManager : IReadyCoreManager, IDisposable, IAsy
         return UseAsync((core, token) => core.RestartAsync(token), cancellationToken);
     }
 
-    public void Dispose()
-    {
-        // 进程退出路径只有同步 Dispose，此处有意阻塞桥接异步释放。
-        DisposeAsync().AsTask().GetAwaiter().GetResult();
-    }
-
     public async ValueTask DisposeAsync()
     {
         _isDisposalRequested = true;
@@ -76,7 +70,7 @@ public sealed class SwitchableCoreManager : IReadyCoreManager, IDisposable, IAsy
 
             _isDisposed = true;
             Detach(_current);
-            DisposeCore(_current);
+            await DisposeCoreAsync(_current).ConfigureAwait(false);
         }
         finally
         {
@@ -93,33 +87,6 @@ public sealed class SwitchableCoreManager : IReadyCoreManager, IDisposable, IAsy
         if (Volatile.Read(ref _current) is ServiceModeCoreManager serviceModeCoreManager)
         {
             serviceModeCoreManager.SetShutdownSuspension(isSuspended);
-        }
-    }
-
-    public bool TryDisposeForShutdown()
-    {
-        _isDisposalRequested = true;
-        // 退出事件不能等待仍在执行的核心操作，Windows 会随 Job 关闭核心。
-        if (!_gate.Wait(0))
-        {
-            return false;
-        }
-
-        try
-        {
-            if (_isDisposed)
-            {
-                return true;
-            }
-
-            _isDisposed = true;
-            Detach(_current);
-            DisposeCore(_current);
-            return true;
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 
@@ -160,11 +127,11 @@ public sealed class SwitchableCoreManager : IReadyCoreManager, IDisposable, IAsy
         }
         catch
         {
-            DisposeCore(next);
+            await DisposeCoreAsync(next).ConfigureAwait(false);
             throw;
         }
 
-        ReplaceCore(next, snapshot);
+        await ReplaceCoreAsync(next, snapshot).ConfigureAwait(false);
     }
 
     private async Task<Exception?> SwitchEvenIfUnavailableAsync(ICoreManager next, CancellationToken cancellationToken)
@@ -181,17 +148,17 @@ public sealed class SwitchableCoreManager : IReadyCoreManager, IDisposable, IAsy
             snapshot = new CoreSnapshot(CoreState.Unavailable, null, string.Empty, exception.Message);
         }
 
-        ReplaceCore(next, snapshot);
+        await ReplaceCoreAsync(next, snapshot).ConfigureAwait(false);
         return readinessFailure;
     }
 
-    private void ReplaceCore(ICoreManager next, CoreSnapshot snapshot)
+    private async Task ReplaceCoreAsync(ICoreManager next, CoreSnapshot snapshot)
     {
         var previous = _current;
         Detach(previous);
         Volatile.Write(ref _current, next);
         Attach(next);
-        DisposeCore(previous);
+        await DisposeCoreAsync(previous).ConfigureAwait(false);
         try
         {
             OnStateChanged(this, snapshot);
@@ -244,11 +211,15 @@ public sealed class SwitchableCoreManager : IReadyCoreManager, IDisposable, IAsy
         CoreLogReceived?.Invoke(this, message);
     }
 
-    private static void DisposeCore(ICoreManager core)
+    private static async ValueTask DisposeCoreAsync(ICoreManager core)
     {
         try
         {
-            if (core is IDisposable disposable)
+            if (core is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else if (core is IDisposable disposable)
             {
                 disposable.Dispose();
             }

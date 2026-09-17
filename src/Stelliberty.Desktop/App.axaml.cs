@@ -299,8 +299,6 @@ public sealed partial class App : Avalonia.Application
                 processPrivilegeProbe: processPrivilegeProbe,
                 systemPlatform: systemProxyPlatform,
                 clipboardWriter: clipboardWriter,
-                serviceModeCoreHostManagedExternally: true,
-                tunAvailabilityManagedExternally: true,
                 appLogReader: new FileAppLogReader(DesktopApplicationLayout.RunningLogFilePath),
                 appLogExporter: new FileAppLogExporter(DesktopApplicationLayout.RunningLogFilePath));
 #if DEBUG

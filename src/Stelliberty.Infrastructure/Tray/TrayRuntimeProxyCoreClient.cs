@@ -1,4 +1,3 @@
-using Stelliberty.Infrastructure.Tray;
 using Stelliberty.Application.Connections;
 using Stelliberty.Application.Proxies;
 using Stelliberty.Domain.Connections;

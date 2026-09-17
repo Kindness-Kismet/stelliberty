@@ -26,7 +26,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly ISelectedSubscriptionRuntimeStore? _runtimeStore;
     private readonly SynchronizationContext? _synchronizationContext;
     private readonly AppSettings _settings;
-    private readonly bool _tunAvailabilityManagedExternally;
     private int _runtimeRefreshVersion;
     private string? _pendingRuntimeSubscriptionId;
     private string? _startupOverrideRetrySubscriptionId;
@@ -81,7 +80,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         IUwpLoopbackService? uwpLoopbackService = null,
         ISystemProxyHostDetector? systemProxyHostDetector = null,
         IServiceModeManager? serviceModeManager = null,
-        Func<bool>? isServiceModeCoreHostActive = null,
         Func<SystemProxyApplicationRequest>? systemProxyRequestFactory = null,
         SelectedRuntimeFallbackGenerator? runtimeFallbackGenerator = null,
         RuntimeConfigGenerator? runtimeConfigGenerator = null,
@@ -96,21 +94,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         ServiceModeStatus? initialServiceModeStatus = null,
         SystemProxyPlatform systemPlatform = SystemProxyPlatform.Other,
         IClipboardWriter? clipboardWriter = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionActivator = null,
-        Func<CancellationToken, Task<ServiceModeOperationResult>>? serviceModeSessionDeactivator = null,
-        Action? serviceModeCoreTransitionStarting = null,
-        Func<CancellationToken, Task>? serviceModeCoreTransitionCompleted = null,
         IAppLogReader? appLogReader = null,
-        IAppLogExporter? appLogExporter = null,
-        bool serviceModeCoreHostManagedExternally = false,
-        bool tunAvailabilityManagedExternally = false)
+        IAppLogExporter? appLogExporter = null)
     {
         _settingsStore = settingsStore;
         _localization = localization;
         _synchronizationContext = SynchronizationContext.Current;
         _now = now ?? (() => DateTimeOffset.Now);
         _settings = initialSettings ?? settingsStore.Load();
-        _tunAvailabilityManagedExternally = tunAvailabilityManagedExternally;
         DataManagement = new SettingsDataManagementViewModel(
             dataManagementService,
             localization,
@@ -127,16 +118,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         _runtimeConfigGenerator = runtimeConfigGenerator ?? new RuntimeConfigGenerator();
         _runtimeStore = runtimeStore;
         CoreManager = coreManager;
-        var runMode = processPrivilegeProbe?.Detect() ?? ProcessRunMode.Normal;
-        var hasInitialServiceTunHost = initialServiceModeStatus?.IsRunning == true;
-        // Tray 模式由后台宿主判定 TUN 可用性，UI 进程不能按自身权限撤销偏好。
-        var wasTunRevokedForPermission = !tunAvailabilityManagedExternally
-            && AppSettingsNormalizer.RevokeTunIfUnavailable(_settings, runMode, hasInitialServiceTunHost);
-        if (wasTunRevokedForPermission)
-        {
-            settingsStore.Save(_settings);
-        }
-
         Update = new SettingsUpdateViewModel(_settings, settingsStore, localization, _now, updateChecker);
         AppBehavior = new SettingsAppBehaviorViewModel(_settings, settingsStore, localization, appBehaviorService, globalHotkeyService);
         AppBehavior.ToastRequested += OnToastRequested;
@@ -157,7 +138,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             systemProxyService,
             resolvedSystemProxyRequestFactory,
             serviceModeManager,
-            isServiceModeCoreHostActive,
             CoreConfig.ApplyTunFromHome,
             networkConnectionProbe,
             homeProxyClient,
@@ -171,12 +151,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
             initialServiceModeStatus,
             localization,
             systemPlatform,
-            clipboardWriter,
-            serviceModeSessionActivator,
-            serviceModeSessionDeactivator,
-            serviceModeCoreTransitionStarting,
-            serviceModeCoreTransitionCompleted,
-            serviceModeCoreHostManagedExternally);
+            clipboardWriter);
         SystemIntegration = new SettingsSystemIntegrationViewModel(
             _settings,
             settingsStore,
@@ -188,20 +163,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         SystemIntegration.ToastRequested += OnToastRequested;
         HomePage.ToastRequested += OnToastRequested;
         Update.ToastRequested += OnToastRequested;
-        if (wasTunRevokedForPermission)
-        {
-            ShowToast(Localize("Home.Toast.TunDisabledByPermission"), ToastType.Warning);
-        }
-
-        if (_settings.IsLazyModeEnabled && !serviceModeCoreHostManagedExternally)
-        {
-            HomePage.IsSystemProxyEnabled = true;
-        }
-
-        var isTunEnabled = tunAvailabilityManagedExternally
-            ? _settings.IsTunEnabled
-            : AppSettingsNormalizer.EffectiveTunEnabled(_settings, runMode, hasInitialServiceTunHost);
-        HomePage.ApplyTunState(isTunEnabled);
+        // TUN 权限由托盘判定，界面只同步结果。
+        HomePage.ApplyTunState(_settings.IsTunEnabled);
         // 模式偏好是应用级状态；先注入主页和代理基线，再加载订阅。
         HomePage.ApplyOutboundMode(OutboundModeParser.TryParse(_settings.OutboundMode) ?? Domain.Proxies.OutboundMode.Rule);
         HomePage.RefreshNetworkConnection();
@@ -751,7 +714,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     // 宿主心跳只提供节奏；当前页面状态决定是否刷新。
     public void OnHomeRuntimeTick()
     {
-        SyncExternallyManagedTun();
+        SyncTunState();
         HomePage.RefreshServiceMode();
         if (CurrentPage == NavigationPage.Home)
         {
@@ -764,13 +727,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void SyncExternallyManagedTun()
+    private void SyncTunState()
     {
-        if (!_tunAvailabilityManagedExternally)
-        {
-            return;
-        }
-
         var isTunEnabled = _settingsStore.Load().IsTunEnabled;
         if (_settings.IsTunEnabled == isTunEnabled && HomePage.IsTunEnabled == isTunEnabled)
         {
