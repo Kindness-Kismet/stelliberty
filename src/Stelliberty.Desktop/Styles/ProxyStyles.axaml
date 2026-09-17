@@ -78,21 +78,33 @@
   </Style>
 
   <Style Selector="Button.delay-test-button">
-    <Setter Property="Padding" Value="3,1" />
+    <!-- 热区贴卡片右下角不越界；内容靠右下加 Padding 维持原视觉位置 -->
+    <Setter Property="Width" Value="64" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Padding" Value="0,0,14,10" />
     <Setter Property="MinWidth" Value="0" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="7" />
+    <!-- 10 = 卡片圆角 12 - 边框 2，热区右/下贴内缘后弧线重合 -->
+    <Setter Property="CornerRadius" Value="0,0,10,10" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="HorizontalContentAlignment" Value="Center" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Right" />
+    <Setter Property="VerticalContentAlignment" Value="Bottom" />
     <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
     <Setter Property="Template">
       <ControlTemplate>
-        <ContentPresenter Content="{TemplateBinding Content}"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center" />
+        <!-- ContentPresenter 无 Padding，内边距由 Border 承载 -->
+        <!-- Background 必须非空，否则 Border 不参与命中测试 -->
+        <Border Background="Transparent"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </Border>
       </ControlTemplate>
     </Setter>
   </Style>

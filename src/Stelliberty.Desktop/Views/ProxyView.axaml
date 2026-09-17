@@ -200,9 +200,6 @@
                   </Grid>
                   <Button Classes="delay-test-button"
                           AutomationProperties.AutomationId="{Binding TestDelayAutomationId}"
-                          HorizontalAlignment="Right"
-                          VerticalAlignment="Bottom"
-                          Margin="0,0,11,9"
                           Command="{Binding #ProxyPageRoot.((vm:ProxyPageViewModel)DataContext).TestNodeDelayCommand}"
                           CommandParameter="{Binding Name}">
                     <Panel Height="18">
@@ -336,9 +333,6 @@
                                 </Grid>
                                 <Button Classes="delay-test-button"
                                         AutomationProperties.AutomationId="{Binding TestDelayAutomationId}"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Bottom"
-                                        Margin="0,0,11,9"
                                         Command="{Binding #ProxyPageRoot.((vm:ProxyPageViewModel)DataContext).TestNodeDelayCommand}"
                                         CommandParameter="{Binding Name}">
                                   <Panel Height="18">
