@@ -483,7 +483,7 @@
   "Settings.AppBehavior.SilentStart.Description": "Hide the window on startup",
   "Settings.AppBehavior.MinimizeToTray": "Minimize to Tray on Close",
   "Settings.AppBehavior.LightweightMode": "Lightweight Mode",
-  "Settings.AppBehavior.LightweightMode.Description": "Free UI memory when hiding to the tray; reload the interface when reopened",
+  "Settings.AppBehavior.LightweightMode.Description": "Reduce memory usage after the window has been hidden for a while, but make it slower to show again",
   "Settings.AppBehavior.TrayDoubleClick": "Use Left Double-click to Show or Hide Window",
   "Settings.AppBehavior.TrayDoubleClick.Description": "When off, switch to single-click behavior",
   "Settings.AppBehavior.LazyMode": "Lazy Mode",

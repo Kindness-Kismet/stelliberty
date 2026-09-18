@@ -483,7 +483,7 @@
   "Settings.AppBehavior.SilentStart.Description": "启动时，隐藏窗口",
   "Settings.AppBehavior.MinimizeToTray": "关闭时最小化到托盘",
   "Settings.AppBehavior.LightweightMode": "轻量模式",
-  "Settings.AppBehavior.LightweightMode.Description": "隐藏到托盘时释放界面内存，再次打开时重新加载",
+  "Settings.AppBehavior.LightweightMode.Description": "隐藏窗口一段时间后减少内存占用，但再次显示会变慢",
   "Settings.AppBehavior.TrayDoubleClick": "鼠标左键双击显示/隐藏窗口",
   "Settings.AppBehavior.TrayDoubleClick.Description": "关闭后，变更为单击行为",
   "Settings.AppBehavior.LazyMode": "懒惰模式",
