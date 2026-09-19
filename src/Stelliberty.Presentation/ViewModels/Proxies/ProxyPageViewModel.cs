@@ -55,7 +55,6 @@ public sealed class ProxyPageViewModel : ViewModelBase, IDisposable
     private int _scrollToTopRequestId;
     private int _configVersion;
     private bool _hasLoadedConfig;
-    private bool _isInitialLoadCompleted;
     private bool _isPresentationActive;
     private bool _isPresentationCacheReleased;
     private string? _loadedSubscriptionId;
@@ -152,7 +151,7 @@ public sealed class ProxyPageViewModel : ViewModelBase, IDisposable
 
     public int? ParsedNodeCount => _hasLoadedConfig ? _config.Nodes.Count : null;
 
-    public bool IsInitialLoadCompleted => _isInitialLoadCompleted;
+    public PageLoadingState Loading { get; } = new();
 
     public int? TestedAverageDelay
     {
@@ -297,7 +296,7 @@ public sealed class ProxyPageViewModel : ViewModelBase, IDisposable
         _shouldChangeCoreOnSelection = shouldChangeCoreOnSelection;
         _shouldTestDelaysThroughService = shouldTestDelaysThroughService;
         RaiseProxyStateChanged();
-        CompleteInitialLoad();
+        Loading.CompleteInitialLoad();
     }
 
     public void ActivatePresentation()
@@ -369,30 +368,12 @@ public sealed class ProxyPageViewModel : ViewModelBase, IDisposable
 
     public async Task RefreshProxiesAsync(CancellationToken cancellationToken = default)
     {
-        try
+        using var loading = Loading.BeginLoading();
+        CancelDelayTests();
+        if (_primaryConfigProvider is not null)
         {
-            CancelDelayTests();
-
-            if (_primaryConfigProvider is not null)
-            {
-                await LoadAsync(_primaryConfigProvider, _fallbackConfigProvider, cancellationToken);
-            }
+            await LoadAsync(_primaryConfigProvider, _fallbackConfigProvider, cancellationToken);
         }
-        finally
-        {
-            CompleteInitialLoad();
-        }
-    }
-
-    private void CompleteInitialLoad()
-    {
-        if (_isInitialLoadCompleted)
-        {
-            return;
-        }
-
-        _isInitialLoadCompleted = true;
-        OnPropertyChanged(nameof(IsInitialLoadCompleted));
     }
 
     public void SetOutboundMode(Domain.Proxies.OutboundMode mode)
@@ -435,6 +416,7 @@ public sealed class ProxyPageViewModel : ViewModelBase, IDisposable
 
     public async Task LoadAsync(IProxyConfigProvider primary, IProxyConfigProvider? fallback, CancellationToken cancellationToken = default)
     {
+        using var loading = Loading.BeginLoading();
         LoadConfig(await _resilientLoader.LoadAsync(primary, fallback, cancellationToken));
     }
 
@@ -443,7 +425,7 @@ public sealed class ProxyPageViewModel : ViewModelBase, IDisposable
 
     public async Task SyncExternalSelectionsAsync(CancellationToken cancellationToken = default)
     {
-        if (!_isPresentationActive
+        if (Loading.IsLoading || !_isPresentationActive
             || _primaryConfigProvider is null
             || _delayTests.IsTesting)
         {

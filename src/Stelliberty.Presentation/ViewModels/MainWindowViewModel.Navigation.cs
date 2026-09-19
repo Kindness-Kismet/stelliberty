@@ -57,6 +57,7 @@ public sealed partial class MainWindowViewModel
 
     private void RaisePageDependentChanges()
     {
+        OnPropertyChanged(nameof(IsCurrentPageLoading));
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsProxySelected));
         OnPropertyChanged(nameof(IsConnectionsSelected));

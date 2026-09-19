@@ -91,6 +91,7 @@ public sealed class OverridePageViewModel : ViewModelBase, IDisposable
 
     public string? CurrentOverrideId => _currentOverrideId;
 
+    public PageLoadingState Loading { get; } = new();
     public bool IsEmptyVisible => _overrides.Count == 0;
 
     public bool IsEmptyTextVisible => IsEmptyVisible;
@@ -156,11 +157,13 @@ public sealed class OverridePageViewModel : ViewModelBase, IDisposable
         _deleteDialogOverrideId = _overrides.Any(item => item.Id == deleteDialogOverrideId) ? deleteDialogOverrideId : null;
         RaiseOverrideStateChanged();
         RaiseMenuStateChanged();
+        Loading.CompleteInitialLoad();
     }
 
     // 启动列表在后台加载并回到 UI 线程提交；失败只记日志。
     public async Task InitializeAsync()
     {
+        using var loading = Loading.BeginLoading();
         if (_overrideStore is null)
         {
             return;

@@ -5,7 +5,7 @@ using Stelliberty.Domain.Proxies;
 
 namespace Stelliberty.Application.Proxies;
 
-public sealed class ProxyDelayService(IProxyDelayTester tester, IProxyDelayResultSink? resultSink = null)
+public sealed class ProxyDelayService(IProxyDelayTester tester, IProxyDelayResultSink resultSink)
 {
     // 所有测速共享并发预算，避免单测与批测叠加超出核心承载。
     private const int DelayTestConcurrency = 15;
@@ -191,7 +191,6 @@ public sealed class ProxyDelayService(IProxyDelayTester tester, IProxyDelayResul
 
     private async Task<string?> CaptureScopeAsync(CancellationToken cancellationToken)
     {
-        if (resultSink is null) return null;
         try
         {
             return await resultSink.CaptureScopeAsync(cancellationToken).ConfigureAwait(false);
@@ -205,7 +204,7 @@ public sealed class ProxyDelayService(IProxyDelayTester tester, IProxyDelayResul
 
     private async Task PublishAsync(string? scope, string proxyName, int delay, CancellationToken cancellationToken)
     {
-        if (scope is null || resultSink is null) return;
+        if (scope is null) return;
         var publication = new ProxyDelayPublication(scope, proxyName, delay, DateTimeOffset.UtcNow);
         try
         {

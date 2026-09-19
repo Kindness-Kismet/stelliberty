@@ -357,9 +357,7 @@ public sealed partial class App : Avalonia.Application
 #if DEBUG
                     LogStartupTrace("Background startup dispatch entered", startupStartedAt);
 #endif
-                    _ = subscriptionPage.InitializeAsync();
-                    _ = overridePage.InitializeAsync();
-                    _ = StartCoreServicesAsync(coreManager, viewModel, proxyPage, rulePage, proxySelectionRestorer);
+                    _ = InitializePageDataAsync(coreManager, viewModel, proxySelectionRestorer);
                 },
                 DispatcherPriority.Background);
 #if DEBUG
@@ -514,6 +512,25 @@ public sealed partial class App : Avalonia.Application
         }
     }
 
+    private async Task InitializePageDataAsync(
+        TrayCoreManager coreManager, MainWindowViewModel viewModel, ProxySelectionRestorer proxySelectionRestorer)
+    {
+#if DEBUG
+        await DebugCommands.DelayPageInitializationAsync();
+#endif
+        try
+        {
+            await Task.WhenAll(
+                viewModel.SubscriptionPage.InitializeAsync(),
+                viewModel.OverridePage.InitializeAsync(),
+                StartCoreServicesAsync(coreManager, viewModel, viewModel.ProxyPage, viewModel.RulePage, proxySelectionRestorer));
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Error(exception, "Page initialization failed");
+        }
+    }
+
     private async Task StartCoreServicesAsync(
         TrayCoreManager coreManager,
         MainWindowViewModel viewModel,
@@ -521,6 +538,10 @@ public sealed partial class App : Avalonia.Application
         RulePageViewModel rulePage,
         ProxySelectionRestorer proxySelectionRestorer)
     {
+        using var proxyLoading = proxyPage.Loading.BeginLoading();
+        using var ruleLoading = rulePage.Loading.BeginLoading();
+        using var connectionLoading = viewModel.ConnectionPage.Loading.BeginLoading();
+        using var coreLogLoading = viewModel.CoreLogPage.Loading.BeginLoading();
         try
         {
             await coreManager.EnsureReadyAsync(CancellationToken.None);
@@ -529,6 +550,16 @@ public sealed partial class App : Avalonia.Application
         {
             AppLogger.Warning($"Core manager startup failed: {exception.Message}");
             viewModel.ShowErrorToast(LocalizationManager.Translate("Common.Error.CoreStartupFailed"));
+        }
+
+        viewModel.CompleteInitialCoreLogLoad();
+        try
+        {
+            await viewModel.ConnectionPage.RefreshConnectionsAsync();
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"Startup connection list load failed: {exception.Message}");
         }
 
         try

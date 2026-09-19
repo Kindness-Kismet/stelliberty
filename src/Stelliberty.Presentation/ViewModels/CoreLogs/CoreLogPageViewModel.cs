@@ -33,6 +33,7 @@ public sealed class CoreLogPageViewModel : ViewModelBase, IDisposable
         ClearLogsCommand = new RelayCommand(ClearLogs);
     }
 
+    public PageLoadingState Loading { get; } = new();
     public IReadOnlyList<CoreLogMessage> Logs => _state.Logs;
 
     public IReadOnlyList<CoreLogMessage> FilteredLogs => _filter.Apply(_state.Logs, _state.FilterLevel, _state.SearchKeyword);
@@ -142,6 +143,7 @@ public sealed class CoreLogPageViewModel : ViewModelBase, IDisposable
         }
 
         RaiseLogStateChanged();
+        Loading.CompleteInitialLoad();
     }
 
     public void ClearLogs()

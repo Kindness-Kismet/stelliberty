@@ -130,6 +130,7 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
     public bool HasSubscription => _snapshot.HasSubscription;
     public bool IsCoreRunning => _isCoreRunning;
     public bool HasRequestedRefresh => _hasRequestedRefresh;
+    public PageLoadingState Loading { get; } = new();
     public bool IsEmptyVisible => _overrideService is null
         ? !_isCoreRunning || _filteredRules.Count == 0
         : IsVisibleRulesEmpty;
@@ -305,6 +306,7 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
 
     public void LoadEditorSnapshot()
     {
+        using var loading = Loading.HasLoaded ? null : Loading.BeginLoading();
         if (_overrideService is null)
         {
             return;
@@ -364,6 +366,7 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
 
     private void RequestRefresh()
     {
+        using var loading = Loading.HasLoaded ? null : Loading.BeginLoading();
         _hasRequestedRefresh = true;
         if (_overrideService is not null)
         {
@@ -741,6 +744,7 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
         RebuildFilteredRows();
         OnPropertyChanged(nameof(IsEmptyVisible));
         OnPropertyChanged(nameof(EmptyText));
+        Loading.CompleteInitialLoad();
     }
 
     private void RebuildFilteredRows()

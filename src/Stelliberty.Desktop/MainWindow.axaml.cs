@@ -183,11 +183,28 @@ public sealed partial class MainWindow : Window
 
     private void OnAttachedViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName != nameof(MainWindowViewModel.CurrentPage)
-            || sender is not MainWindowViewModel viewModel)
+        if (sender is not MainWindowViewModel viewModel)
         {
             return;
         }
+
+        if (args.PropertyName == nameof(MainWindowViewModel.IsCurrentPageLoading))
+        {
+            if (!IsVisible) return;
+            if (_pendingPageHost is { } pending)
+            {
+                if (pending.Content is not null)
+                {
+                    CompletePageLoadingThenEnter(_visiblePageHost, pending, _pageTransitionVersion);
+                }
+            }
+            else if (viewModel.IsCurrentPageLoading && _visiblePageHost is not null)
+            {
+                AnimatePageTransition(viewModel.CurrentPage);
+            }
+            return;
+        }
+        if (args.PropertyName != nameof(MainWindowViewModel.CurrentPage)) return;
 
         AnimatePageTransition(viewModel.CurrentPage);
 #if DEBUG
@@ -241,6 +258,7 @@ public sealed partial class MainWindow : Window
     {
         if (isVisible)
         {
+            if (_pageLoadingShownAt != 0) return;
             _pageLoadingShownAt = Stopwatch.GetTimestamp();
             PageLoadingIndicator.Start();
             PageLoadingOverlay.Opacity = 1;
@@ -275,6 +293,13 @@ public sealed partial class MainWindow : Window
             other.IsVisible = false;
         }
 
+        _visiblePageHost = null;
+        if (_attachedViewModel?.IsCurrentPageLoading == true)
+        {
+            AnimatePageTransition(page);
+            return;
+        }
+
         EnsurePageLoaded(page);
         host.IsVisible = true;
         ShowPageHost(host);
@@ -290,7 +315,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (ReferenceEquals(nextHost, _visiblePageHost) && nextHost.Content is not null)
+        var isDataLoading = _attachedViewModel?.IsCurrentPageLoading == true;
+        if (ReferenceEquals(nextHost, _visiblePageHost) && nextHost.Content is not null && !isDataLoading)
         {
             CancelPendingPageTransition();
             ShowPageHost(nextHost);
@@ -307,12 +333,11 @@ public sealed partial class MainWindow : Window
             previousHost.IsHitTestVisible = false;
         }
 
-        if (nextHost.Content is not null)
+        if (nextHost.Content is not null && !isDataLoading)
         {
             // 缓存页已有视觉树，直接启动过渡，避免等待空闲合成器唤醒。
             PrepareNextHostEnterState(nextHost);
             ActivatePageHost(nextHost);
-            PreparePageLayout(page, nextHost);
             StartPageTransition(previousHost, nextHost, version);
             return;
         }
@@ -329,6 +354,14 @@ public sealed partial class MainWindow : Window
         }
 
         SetPageLoadingVisible(true);
+        if (nextHost.Content is not null)
+        {
+            // 缓存页立即准备显示状态，避免数据就绪通知先于后台布局回调。
+            PrepareNextHostEnterState(nextHost);
+            ActivatePageHost(nextHost);
+            return;
+        }
+
         Dispatcher.UIThread.Post(
             () =>
             {
@@ -340,7 +373,6 @@ public sealed partial class MainWindow : Window
                 EnsurePageLoaded(page);
                 PrepareNextHostEnterState(nextHost);
                 ActivatePageHost(nextHost);
-                PreparePageLayout(page, nextHost);
                 CompletePageLoadingThenEnter(previousHost, nextHost, version);
             },
             DispatcherPriority.Background);
@@ -366,6 +398,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // 视觉树创建与业务加载分别就绪，数据未返回时保持遮罩。
+        if (_attachedViewModel?.IsCurrentPageLoading == true) return;
+
         var remaining = PageLoadingMinVisible - Stopwatch.GetElapsedTime(_pageLoadingShownAt);
         if (remaining <= TimeSpan.Zero)
         {
@@ -377,12 +412,7 @@ public sealed partial class MainWindow : Window
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            if (version != _pageTransitionVersion || !ReferenceEquals(_pendingPageHost, nextHost))
-            {
-                return;
-            }
-
-            StartPageTransition(previousHost, nextHost, version);
+            CompletePageLoadingThenEnter(previousHost, nextHost, version);
         };
         timer.Start();
     }
@@ -394,6 +424,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        PreparePageLayout(_attachedViewModel!.CurrentPage, nextHost);
         SetPageLoadingVisible(false);
         _pendingPageHost = null;
         _visiblePageHost = nextHost;
@@ -502,6 +533,21 @@ public sealed partial class MainWindow : Window
     }
 
 #if DEBUG
+    internal object CapturePageLoadingState()
+    {
+        var viewModel = _attachedViewModel!;
+        var host = _pageHosts[viewModel.CurrentPage];
+        return new
+        {
+            Page = viewModel.CurrentPage.ToString(),
+            IsDataLoading = viewModel.IsCurrentPageLoading,
+            IsOverlayVisible = IsVisible && PageLoadingOverlay.Opacity > 0,
+            IsContentVisible = IsVisible && host.IsVisible && host.Opacity > 0,
+            Pages = Enum.GetValues<AppNavigationPage>().ToDictionary(
+                page => page.ToString(), page => viewModel.GetPageLoadingState(page)?.IsLoading == true),
+        };
+    }
+
     internal Task WaitForPageReadyAsync(AppNavigationPage page)
     {
         if (!_pageHosts.TryGetValue(page, out var host))
@@ -514,7 +560,7 @@ public sealed partial class MainWindow : Window
         return completion.Task;
     }
 
-    // 调试协议在目标页进入视觉树后才响应，避免自动化查询抢占首次创建。
+    // 数据就绪且页面开始显示后才响应，避免查询抢占首次加载或同页刷新。
     private void WaitForPageReadyOnNextFrame(
         AppNavigationPage page,
         ContentControl host,
@@ -530,8 +576,11 @@ public sealed partial class MainWindow : Window
                 }
 
                 if (ReferenceEquals(_visiblePageHost, host)
+                    && _pendingPageHost is null
+                    && !_attachedViewModel.IsCurrentPageLoading
                     && host.Content is Control
-                    && host.IsVisible)
+                    && host.IsVisible
+                    && host.Opacity > 0)
                 {
                     completion.TrySetResult();
                     return;

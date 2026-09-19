@@ -565,9 +565,6 @@ internal sealed class TrayMenuService(
         {
             var settings = _settingsStore.Load();
             var core = coreRuntime.CurrentStatus;
-            using var proxyTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await proxyCatalog.RefreshAsync(proxyTimeout.Token).ConfigureAwait(false);
-            var proxies = proxyCatalog.GetSnapshot();
             var runtime = runtimeMonitor.GetSnapshot();
             var proxy = await systemProxy.GetStatusAsync().ConfigureAwait(false);
             if (++_refreshCount == 1 || _refreshCount % 5 == 0)
@@ -588,15 +585,27 @@ internal sealed class TrayMenuService(
                 isCoreRunning,
                 canToggleTun,
                 ResolveIconState(isCoreRunning, proxy.IsEnabled, settings.IsTunEnabled));
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                ApplyState(state);
-                _proxyMenu?.Update(proxies);
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => ApplyState(state));
         }
         catch (Exception exception)
         {
             AppLogger.Warning($"Tray state refresh failed: {exception.Message}");
+        }
+
+        // 节点列表单独刷新，查询失败不能跳过系统代理和图标状态。
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await proxyCatalog.RefreshAsync(timeout.Token).ConfigureAwait(false);
+            var proxies = proxyCatalog.GetSnapshot();
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!_isDisposed) _proxyMenu?.Update(proxies);
+            });
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"Tray proxy menu refresh failed: {exception.Message}");
         }
     }
 

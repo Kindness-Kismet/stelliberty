@@ -185,6 +185,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         ProxyPage.PropertyChanged += OnProxyPagePropertyChanged;
         SyncHomeSubscriptionRuntimeStats();
         OverridePage = overridePage;
+        foreach (var loading in PageLoadingStates) loading.PropertyChanged += OnPageLoadingChanged;
         if (CoreManager is not null)
         {
             CoreManager.StateChanged += OnCoreStateChanged;
@@ -211,8 +212,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         ShowConnectionsCommand = new RelayCommand(() =>
         {
             CurrentPage = NavigationPage.Connections;
-            // 进入时先拉取一次，不等首个定时器触发。
-            _ = ConnectionPage.RefreshConnectionsAsync();
+            // 首批快照由启动流程加载，后续进入页面立即刷新。
+            if (!ConnectionPage.Loading.IsLoading) _ = ConnectionPage.RefreshConnectionsAsync();
         });
         ShowCoreLogsCommand = new RelayCommand(() => CurrentPage = NavigationPage.CoreLogs);
         ShowRulesCommand = new RelayCommand(() => CurrentPage = NavigationPage.Rules);
@@ -230,6 +231,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         _isDisposed = true;
+        foreach (var loading in PageLoadingStates) loading.PropertyChanged -= OnPageLoadingChanged;
         _localization.LanguageChanged -= OnLocalizationLanguageChanged;
         Settings.SubPageChanged -= OnSettingsSubPageChanged;
         DataManagement.RestoreCompleted -= OnDataRestoreCompleted;
@@ -720,7 +722,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             HomePage.RefreshRuntime();
         }
-        else if (CurrentPage == NavigationPage.Connections && !ConnectionPage.IsMonitoringPaused)
+        else if (CurrentPage == NavigationPage.Connections
+            && !ConnectionPage.IsMonitoringPaused
+            && !ConnectionPage.Loading.IsLoading)
         {
             // 连接是动态数据；可见且未暂停页面每秒拉取，避免入口为空。
             _ = ConnectionPage.RefreshConnectionsAsync();
@@ -747,6 +751,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private async Task RefreshSelectedSubscriptionRuntimeAsync(string? subscriptionId, string successMessage, string failureMessage)
     {
+        using var proxyLoading = ProxyPage.Loading.BeginLoading();
+        using var ruleLoading = RulePage.Loading.BeginLoading();
         var refreshVersion = Interlocked.Increment(ref _runtimeRefreshVersion);
         var endpointChangeVersion = Volatile.Read(ref _systemProxyEndpointChangeVersion);
         LastRuntimeRefreshSubscriptionId = subscriptionId;
@@ -918,6 +924,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
     // 空运行时配置收敛后也刷新代理页和规则页。
     private async Task ApplyEmptyRuntimeToCoreAsync(int? refreshVersion = null, long endpointChangeVersion = 0)
     {
+        using var proxyLoading = ProxyPage.Loading.BeginLoading();
+        using var ruleLoading = RulePage.Loading.BeginLoading();
         var emptyConfig = _runtimeConfigGenerator.GenerateEmpty(CurrentRuntimeConfigParams());
         _runtimeStore?.SaveEmpty(emptyConfig.RuntimeConfigContent);
         if (CoreManager is not null)

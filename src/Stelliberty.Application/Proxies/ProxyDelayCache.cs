@@ -23,11 +23,6 @@ public sealed class ProxyDelayCache
 
     public bool Publish(ProxyDelayPublication publication)
     {
-        if (string.IsNullOrWhiteSpace(publication.ProxyName) || publication.Delay < -1)
-        {
-            throw new ArgumentException("Invalid proxy delay publication.", nameof(publication));
-        }
-
         lock (_gate)
         {
             if (publication.Scope != _scope
