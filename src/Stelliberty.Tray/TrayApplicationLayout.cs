@@ -50,5 +50,5 @@ internal static class TrayApplicationLayout
     public static string RunningLogFilePath => Path.Combine(
         AppDataDirectory,
         PathConventions.AppLogsSubdirectory,
-        "tray-running.logs");
+        PathConventions.TrayRunningLogFileName);
 }
