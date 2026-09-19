@@ -1,5 +1,8 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceInclude Source="StatusColors.axaml" />
+  </ResourceDictionary.MergedDictionaries>
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
       <SolidColorBrush x:Key="AppRootSurfaceBrush" Color="#EFEFEF" />
@@ -13,7 +16,6 @@
 
       <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="#0F172A" />
       <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#475569" />
-      <SolidColorBrush x:Key="AppTextTertiaryBrush" Color="#64748B" />
 
       <SolidColorBrush x:Key="CodeSyntaxKeyBrush" Color="#8839EF" />
       <SolidColorBrush x:Key="CodeSyntaxMarkerBrush" Color="#1E66F5" />
@@ -29,9 +31,6 @@
       <SolidColorBrush x:Key="AppInputBrush" Color="#1A000000" />
       <SolidColorBrush x:Key="AppInputHoverBrush" Color="#26000000" />
 
-      <SolidColorBrush x:Key="AppSuccessBrush" Color="#15803D" />
-      <SolidColorBrush x:Key="AppDangerBrush" Color="#DC2626" />
-      <SolidColorBrush x:Key="AppWarningBrush" Color="#B45309" />
       <SolidColorBrush x:Key="AppDangerHoverBrush" Color="#EF4444" />
       <SolidColorBrush x:Key="AppInputFocusBrush" Color="#2563EB" />
 
@@ -62,7 +61,6 @@
 
       <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="#F4F4F5" />
       <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#C0C2C7" />
-      <SolidColorBrush x:Key="AppTextTertiaryBrush" Color="#8B8E96" />
 
       <SolidColorBrush x:Key="CodeSyntaxKeyBrush" Color="#CBA6F7" />
       <SolidColorBrush x:Key="CodeSyntaxMarkerBrush" Color="#89DCEB" />
@@ -78,9 +76,6 @@
       <SolidColorBrush x:Key="AppInputBrush" Color="#1AFFFFFF" />
       <SolidColorBrush x:Key="AppInputHoverBrush" Color="#26FFFFFF" />
 
-      <SolidColorBrush x:Key="AppSuccessBrush" Color="#34D399" />
-      <SolidColorBrush x:Key="AppDangerBrush" Color="#F87171" />
-      <SolidColorBrush x:Key="AppWarningBrush" Color="#FBBF24" />
       <SolidColorBrush x:Key="AppDangerHoverBrush" Color="#EF4444" />
       <SolidColorBrush x:Key="AppInputFocusBrush" Color="#60A5FA" />
 
@@ -132,7 +127,6 @@
 
   <SolidColorBrush x:Key="TagInfoBrush" Color="#2542A5F5" />
   <SolidColorBrush x:Key="TagInfoBorderBrush" Color="#5542A5F5" />
-  <SolidColorBrush x:Key="TagInfoForegroundBrush" Color="#90C5F5" />
   <SolidColorBrush x:Key="TagInfoBarBrush" Color="#42A5F5" />
 
   <SolidColorBrush x:Key="TagSuccessBrush" Color="#2534D399" />

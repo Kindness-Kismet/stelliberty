@@ -52,6 +52,12 @@ public sealed class TrayIpcClient : IDisposable, IAsyncDisposable
     public Task<BackgroundTaskStatus> GetBackgroundStatusAsync(CancellationToken cancellationToken) =>
         RequestAsync<BackgroundTaskStatus>(TrayProtocol.BackgroundStatusMethod, new { }, cancellationToken);
 
+    public Task<string> CaptureProxyDelayScopeAsync(CancellationToken cancellationToken) =>
+        RequestAsync<string>(TrayProtocol.ProxyDelayScopeMethod, new { }, cancellationToken);
+
+    public Task PublishProxyDelayAsync(ProxyDelayPublication publication, CancellationToken cancellationToken) =>
+        RequestAsync<JsonElement>(TrayProtocol.ProxyDelayPublishMethod, publication, cancellationToken);
+
     public Task<TrayCoreOperationResult> EnsureCoreStartedAsync(CancellationToken cancellationToken) =>
         RequestAsync<TrayCoreOperationResult>(TrayProtocol.CoreEnsureStartedMethod, new { }, cancellationToken);
 
@@ -120,6 +126,15 @@ public sealed class TrayIpcClient : IDisposable, IAsyncDisposable
             cancellationToken);
 
 #if DEBUG
+    public Task<JsonElement> ExecuteMenuDebugAsync(TrayMenuDebugRequest request, CancellationToken cancellationToken) =>
+        RequestAsync<JsonElement>(TrayProtocol.MenuDebugMethod, request, cancellationToken);
+
+    public Task<JsonElement> GetProxyMenuAsync(CancellationToken cancellationToken) =>
+        RequestAsync<JsonElement>(TrayProtocol.ProxyMenuMethod, new { }, cancellationToken);
+
+    public Task SelectProxyAsync(Stelliberty.Domain.Proxies.ProxyChangeRequest request, CancellationToken cancellationToken) =>
+        RequestAsync<JsonElement>(TrayProtocol.ProxySelectMethod, request, cancellationToken);
+
     public Task CopyTerminalProxyAsync(CancellationToken cancellationToken) =>
         RequestAsync<JsonElement>(TrayProtocol.CopyTerminalProxyMethod, new { }, cancellationToken);
 

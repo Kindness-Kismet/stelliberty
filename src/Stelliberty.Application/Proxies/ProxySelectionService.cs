@@ -21,6 +21,7 @@ public sealed class ProxySelectionService(
         CancellationToken cancellationToken = default)
     {
         AppLogger.Info($"Proxy selection requested: group={groupName} proxy={nodeName} applyCore={applyToCore.ToString().ToLowerInvariant()}");
+        var subscriptionId = subscriptionSelectionStore?.GetCurrentSubscriptionId();
         var result = new ProxyGroupSelector(config).Select(groupName, nodeName);
         if (applyToCore && coreClient is not null)
         {
@@ -39,7 +40,7 @@ public sealed class ProxySelectionService(
         // 固定选择不写入存储：重启后由还原流程清空，回到自动择优。
         if (!result.Config.Groups.Any(group => group.Name == groupName && group.UsesFixedSelection))
         {
-            PersistSelection(groupName, nodeName);
+            PersistSelection(subscriptionId, groupName, nodeName);
         }
 
         AppLogger.Info($"Proxy selection completed: group={groupName} proxy={nodeName} closeConnections={result.ShouldCloseConnections.ToString().ToLowerInvariant()}");
@@ -91,9 +92,8 @@ public sealed class ProxySelectionService(
         return new ProxyFixedSelectionReleaseResult(config with { Groups = groups }, [.. released]);
     }
 
-    private void PersistSelection(string groupName, string nodeName)
+    private void PersistSelection(string? subscriptionId, string groupName, string nodeName)
     {
-        var subscriptionId = subscriptionSelectionStore?.GetCurrentSubscriptionId();
         if (selectionStore is null || string.IsNullOrWhiteSpace(subscriptionId))
         {
             return;

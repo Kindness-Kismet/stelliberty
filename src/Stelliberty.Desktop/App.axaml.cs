@@ -241,7 +241,7 @@ public sealed partial class App : Avalonia.Application
                 ? parsedProxyNodeSortMode
                 : ProxyNodeSortMode.Default;
             var proxyPage = new ProxyPageViewModel(
-                new ProxyDelayService(proxyDelayTester),
+                new ProxyDelayService(proxyDelayTester, _traySession),
                 proxyCoreClient,
                 primaryProxyConfigProvider,
                 fallbackProxyConfigProvider,
@@ -531,7 +531,7 @@ public sealed partial class App : Avalonia.Application
 
         try
         {
-            await proxySelectionRestorer.RestoreCurrentSubscriptionAsync();
+            await proxySelectionRestorer.RestoreCurrentSubscriptionAsync(preserveFixedSelections: true);
         }
         catch (Exception exception)
         {

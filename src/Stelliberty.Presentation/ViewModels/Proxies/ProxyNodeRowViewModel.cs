@@ -1,5 +1,6 @@
 using Stelliberty.Application.Proxies;
 using Stelliberty.Domain.Proxies;
+using Stelliberty.Presentation.Proxies;
 
 namespace Stelliberty.Presentation.ViewModels;
 
@@ -80,14 +81,7 @@ public sealed class ProxyNodeRowViewModel : ViewModelBase
             _ => "tested"
         };
 
-    public string DelayLevel => _node.Delay switch
-    {
-        null => "delay-none",
-        < 0 => "delay-bad",
-        <= 300 => "delay-good",
-        <= 500 => "delay-mid",
-        _ => "delay-slow"
-    };
+    public string DelayLevel => ProxyDelayPresentation.GetLevel(_node.Delay);
 
     public void Update(ProxyNode node, bool isSelected, bool isLocated, bool isClickable, bool isDelayTesting)
     {

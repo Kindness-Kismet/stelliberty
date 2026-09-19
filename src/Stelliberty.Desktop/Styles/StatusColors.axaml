@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="AppTextTertiaryBrush" Color="#64748B" />
+      <SolidColorBrush x:Key="AppSuccessBrush" Color="#15803D" />
+      <SolidColorBrush x:Key="AppDangerBrush" Color="#DC2626" />
+      <SolidColorBrush x:Key="AppWarningBrush" Color="#B45309" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="AppTextTertiaryBrush" Color="#8B8E96" />
+      <SolidColorBrush x:Key="AppSuccessBrush" Color="#34D399" />
+      <SolidColorBrush x:Key="AppDangerBrush" Color="#F87171" />
+      <SolidColorBrush x:Key="AppWarningBrush" Color="#FBBF24" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+  <SolidColorBrush x:Key="TagInfoForegroundBrush" Color="#90C5F5" />
+</ResourceDictionary>

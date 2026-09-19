@@ -31,7 +31,8 @@ internal sealed class TrayRuntime
             var uiSessions = new UiSessionManager(uiLauncher);
             var coreLogs = new CoreLogJournal();
             await using var coreRuntime = new TrayCoreRuntimeHost(coreLogs);
-            await using var backgroundTasks = new TrayBackgroundTasks(coreRuntime);
+            using var proxyCatalog = new TrayProxyCatalog(coreRuntime);
+            await using var backgroundTasks = new TrayBackgroundTasks(coreRuntime, proxyCatalog);
             await using var runtimeMonitor = new RuntimeTrafficMonitor(
                 coreRuntime,
                 new PipeCoreProxyClient(TrayCoreEndpoints.Core));
@@ -43,6 +44,7 @@ internal sealed class TrayRuntime
                 uiSessions,
                 coreRuntime,
                 runtimeMonitor,
+                proxyCatalog,
                 systemProxy,
                 lifetime);
             await trayMenu.StartAsync();
@@ -54,7 +56,8 @@ internal sealed class TrayRuntime
                 runtimeMonitor,
                 systemProxy,
                 trayMenu,
-                backgroundTasks);
+                backgroundTasks,
+                proxyCatalog);
             await using var server = new TrayIpcServer(
                 TrayEndpoint.Current,
                 router.HandleAsync,

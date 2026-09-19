@@ -5,7 +5,7 @@ using Stelliberty.Domain.Proxies;
 
 namespace Stelliberty.Application.Proxies;
 
-public sealed class ProxyDelayService(IProxyDelayTester tester)
+public sealed class ProxyDelayService(IProxyDelayTester tester, IProxyDelayResultSink? resultSink = null)
 {
     // 所有测速共享并发预算，避免单测与批测叠加超出核心承载。
     private const int DelayTestConcurrency = 15;
@@ -18,8 +18,10 @@ public sealed class ProxyDelayService(IProxyDelayTester tester)
             return new ProxyDelayResult(config, [], [proxyName], []);
         }
 
+        var scope = await CaptureScopeAsync(cancellationToken);
         var stopwatch = Stopwatch.StartNew();
         var delay = await TestDelayAsync(config, proxyName, cancellationToken);
+        await PublishAsync(scope, proxyName, delay, cancellationToken);
         if (delay >= 0)
         {
             AppLogger.Info($"Proxy delay test completed: proxy={proxyName} delay={delay}ms elapsed={stopwatch.Elapsed.TotalMilliseconds:0}ms");
@@ -115,6 +117,7 @@ public sealed class ProxyDelayService(IProxyDelayTester tester)
             }
         }
 
+        var scopeId = await CaptureScopeAsync(cancellationToken);
         var delays = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var tasks = targets.Select(async proxyName =>
         {
@@ -125,6 +128,7 @@ public sealed class ProxyDelayService(IProxyDelayTester tester)
                 () => progress?.Report(new ProxyDelayProgress(proxyName, 0, IsCompleted: false)));
             delays[proxyName] = delay;
             progress?.Report(new ProxyDelayProgress(proxyName, delay));
+            await PublishAsync(scopeId, proxyName, delay, cancellationToken);
         });
         await Task.WhenAll(tasks);
         cancellationToken.ThrowIfCancellationRequested();
@@ -183,5 +187,34 @@ public sealed class ProxyDelayService(IProxyDelayTester tester)
         }
 
         AppLogger.Info(message);
+    }
+
+    private async Task<string?> CaptureScopeAsync(CancellationToken cancellationToken)
+    {
+        if (resultSink is null) return null;
+        try
+        {
+            return await resultSink.CaptureScopeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            AppLogger.Warning($"Proxy delay sharing unavailable: {exception.Message}");
+            return null;
+        }
+    }
+
+    private async Task PublishAsync(string? scope, string proxyName, int delay, CancellationToken cancellationToken)
+    {
+        if (scope is null || resultSink is null) return;
+        var publication = new ProxyDelayPublication(scope, proxyName, delay, DateTimeOffset.UtcNow);
+        try
+        {
+            await resultSink.PublishAsync(publication, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // 展示通道失效不能抹掉已完成的测速结果。
+            AppLogger.Warning($"Proxy delay sharing failed: {exception.Message}");
+        }
     }
 }

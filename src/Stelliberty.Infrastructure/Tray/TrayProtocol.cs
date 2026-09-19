@@ -8,12 +8,14 @@ namespace Stelliberty.Infrastructure.Tray;
 
 public static class TrayProtocol
 {
-    public const int Version = 7;
+    public const int Version = 8;
 
     public const string HelloMethod = "tray.hello";
     public const string HealthMethod = "tray.get_health";
     public const string BackgroundStatusMethod = "background.get_status";
     public const string BackgroundChangedEvent = "background.changed";
+    public const string ProxyDelayScopeMethod = "proxies.delay_scope";
+    public const string ProxyDelayPublishMethod = "proxies.publish_delay";
     public const string ShutdownMethod = "tray.shutdown";
     public const string CoreEnsureStartedMethod = "core.ensure_started";
     public const string CoreStopMethod = "core.stop";
@@ -33,6 +35,9 @@ public static class TrayProtocol
 #if DEBUG
     public const string CopyTerminalProxyMethod = "tray.copy_terminal";
     public const string HotkeySimulateMethod = "hotkey.simulate";
+    public const string ProxyMenuMethod = "tray.proxy_menu";
+    public const string ProxySelectMethod = "tray.select_proxy";
+    public const string MenuDebugMethod = "tray.debug_menu";
 #endif
     public const string UiActivateMethod = "ui.activate";
     public const string UiRegisterMethod = "ui.register";
@@ -49,6 +54,10 @@ public sealed record TrayHelloRequest(
     int ProtocolVersion,
     string AppVersion,
     int ProcessId);
+
+#if DEBUG
+public sealed record TrayMenuDebugRequest(string Action, string? AutomationId = null);
+#endif
 
 public sealed record TrayHello(
     int ProtocolVersion,

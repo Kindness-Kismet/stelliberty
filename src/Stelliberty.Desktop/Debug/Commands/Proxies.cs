@@ -20,7 +20,7 @@ internal static partial class DebugCommands
 
         if (spec.StartsWith("list nodes", StringComparison.OrdinalIgnoreCase))
         {
-            var groupName = spec["list nodes".Length..].Trim();
+            var groupName = FirstCommandToken(spec["list nodes".Length..]);
             if (!string.IsNullOrWhiteSpace(groupName))
             {
                 page.SelectGroup(groupName);
@@ -32,7 +32,7 @@ internal static partial class DebugCommands
 
         if (spec.StartsWith("get delay ", StringComparison.OrdinalIgnoreCase))
         {
-            var name = spec["get delay ".Length..].Trim();
+            var name = FirstCommandToken(spec["get delay ".Length..]);
             var row = page.VisibleNodeRows.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.Ordinal));
             if (row is null)
             {
@@ -44,25 +44,25 @@ internal static partial class DebugCommands
 
         if (spec.StartsWith("select group ", StringComparison.OrdinalIgnoreCase))
         {
-            page.SelectGroup(spec["select group ".Length..].Trim());
+            page.SelectGroup(FirstCommandToken(spec["select group ".Length..]));
             return ProxyState(page);
         }
 
         if (spec.StartsWith("select node ", StringComparison.OrdinalIgnoreCase))
         {
-            await page.SelectNodeAsync(spec["select node ".Length..].Trim());
+            await page.SelectNodeAsync(FirstCommandToken(spec["select node ".Length..]));
             return ProxyState(page);
         }
 
         if (spec.StartsWith("test node ", StringComparison.OrdinalIgnoreCase))
         {
-            page.TestNodeDelay(spec["test node ".Length..].Trim());
+            page.TestNodeDelay(FirstCommandToken(spec["test node ".Length..]));
             return ProxyState(page);
         }
 
         if (spec.StartsWith("test group ", StringComparison.OrdinalIgnoreCase))
         {
-            page.TestGroupDelays(spec["test group ".Length..].Trim());
+            page.TestGroupDelays(FirstCommandToken(spec["test group ".Length..]));
             return ProxyState(page);
         }
 
@@ -110,7 +110,7 @@ internal static partial class DebugCommands
 
         if (spec.StartsWith("expand group ", StringComparison.OrdinalIgnoreCase))
         {
-            var name = spec["expand group ".Length..].Trim();
+            var name = FirstCommandToken(spec["expand group ".Length..]);
             if (!string.Equals(page.ExpandedGroupName, name, StringComparison.Ordinal))
             {
                 page.ToggleGroupExpand(name);

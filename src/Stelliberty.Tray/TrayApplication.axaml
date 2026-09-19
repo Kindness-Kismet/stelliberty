@@ -1,9 +1,49 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:semi="https://irihi.tech/semi"
+             xmlns:tray="using:Stelliberty.Tray"
              x:Class="Stelliberty.Tray.TrayApplication"
              Name="StellibertyTray">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/Styles/StatusColors.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <!-- 分组与节点共用内容宽度；延迟栏沿用代理页的 64 宽度。 -->
+      <x:Double x:Key="TrayProxyContentWidth">240</x:Double>
+    </ResourceDictionary>
+  </Application.Resources>
+  <Application.DataTemplates>
+    <DataTemplate DataType="tray:TrayProxyNodeMenuItem" x:DataType="tray:TrayProxyNodeMenuItem">
+      <Grid Width="{StaticResource TrayProxyContentWidth}" ColumnDefinitions="*,64" ColumnSpacing="12">
+        <TextBlock Text="{Binding Name}"
+                   AutomationProperties.AutomationId="{Binding NameAutomationId}"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{Binding DelayText}"
+                   Classes="delay-badge" Tag="{Binding DelayLevel}"
+                   AutomationProperties.AutomationId="{Binding DelayAutomationId}"
+                   TextAlignment="Right" VerticalAlignment="Center" />
+      </Grid>
+    </DataTemplate>
+    <DataTemplate DataType="tray:TrayProxyGroupMenuItem" x:DataType="tray:TrayProxyGroupMenuItem">
+      <TextBlock Width="{StaticResource TrayProxyContentWidth}" Text="{Binding Header}"
+                 AutomationProperties.AutomationId="{Binding NameAutomationId}"
+                 TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+    </DataTemplate>
+    <DataTemplate DataType="NativeMenuItem" x:DataType="NativeMenuItem">
+      <TextBlock Text="{Binding Header}" VerticalAlignment="Center" />
+    </DataTemplate>
+  </Application.DataTemplates>
   <Application.Styles>
     <semi:SemiTheme Locale="zh-CN" />
+    <StyleInclude Source="/Styles/ProxyDelayStyles.axaml" />
+    <Style Selector="MenuItem">
+      <Setter Property="HeaderTemplate">
+        <DataTemplate>
+          <!-- 标题默认上下文是字符串，实际菜单项由父控件传入。 -->
+          <ContentPresenter Content="{Binding $parent[MenuItem].DataContext}" />
+        </DataTemplate>
+      </Setter>
+    </Style>
   </Application.Styles>
 </Application>

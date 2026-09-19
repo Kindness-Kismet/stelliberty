@@ -19,6 +19,13 @@
     <ProjectReference Include="..\Stelliberty.Native\Stelliberty.Native.csproj" />
   </ItemGroup>
 
+  <!-- 托盘只共享展示规则与资源，不加载页面 ViewModel。 -->
+  <ItemGroup>
+    <Compile Include="..\Stelliberty.Presentation\Proxies\ProxyDelayPresentation.cs" Link="Proxies\ProxyDelayPresentation.cs" />
+    <AvaloniaResource Include="..\Stelliberty.Desktop\Styles\StatusColors.axaml" Link="Styles\StatusColors.axaml" />
+    <AvaloniaResource Include="..\Stelliberty.Desktop\Styles\ProxyDelayStyles.axaml" Link="Styles\ProxyDelayStyles.axaml" />
+  </ItemGroup>
+
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
     <AvaloniaResource Include="..\Stelliberty.Desktop\Assets\win\tray\**" Link="Assets\win\tray\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

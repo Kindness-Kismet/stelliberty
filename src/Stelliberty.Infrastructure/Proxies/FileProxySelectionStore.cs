@@ -8,8 +8,6 @@ namespace Stelliberty.Infrastructure.Proxies;
 public sealed class FileProxySelectionStore(string rootDirectory) : IProxySelectionStore
 {
     private readonly string _statePath = Path.Combine(rootDirectory, "proxies", "selection_state.json");
-    // 读改写必须串行：并发会丢更新，也会撞同一个原子替换临时文件。
-    private readonly object _syncRoot = new();
 
     public IReadOnlyDictionary<string, string> GetSelections(string subscriptionId)
     {
@@ -18,7 +16,7 @@ public sealed class FileProxySelectionStore(string rootDirectory) : IProxySelect
             return new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
-        lock (_syncRoot)
+        using (new NamedFileLock(_statePath))
         {
             var state = ReadState();
             return state.Subscriptions.TryGetValue(subscriptionId, out var selections)
@@ -36,7 +34,7 @@ public sealed class FileProxySelectionStore(string rootDirectory) : IProxySelect
             return;
         }
 
-        lock (_syncRoot)
+        using (new NamedFileLock(_statePath))
         {
             var state = ReadState();
             if (!state.Subscriptions.TryGetValue(subscriptionId, out var selections))
@@ -59,7 +57,7 @@ public sealed class FileProxySelectionStore(string rootDirectory) : IProxySelect
             return;
         }
 
-        lock (_syncRoot)
+        using (new NamedFileLock(_statePath))
         {
             var state = ReadState();
             if (!state.Subscriptions.TryGetValue(subscriptionId, out var selections)
@@ -86,7 +84,7 @@ public sealed class FileProxySelectionStore(string rootDirectory) : IProxySelect
             return;
         }
 
-        lock (_syncRoot)
+        using (new NamedFileLock(_statePath))
         {
             var state = ReadState();
             if (!state.Subscriptions.Remove(subscriptionId))

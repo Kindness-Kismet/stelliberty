@@ -13,6 +13,7 @@
   "Tray.Terminal.Cmd": "CMD",
   "Tray.Terminal.Bash": "Bash",
   "Tray.OutboundMode": "Outbound Mode",
+  "Tray.ProxyGroups": "Proxy Groups",
   "Tray.RuleMode": "Rule Mode",
   "Tray.GlobalMode": "Global Proxy",
   "Tray.DirectMode": "Direct",
