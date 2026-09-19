@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Stelliberty.Infrastructure.Tray;
 using Stelliberty.Application.Platform;
+using Stelliberty.Application.Runtime;
 
 namespace Stelliberty.Tray;
 
@@ -39,6 +40,32 @@ internal static class DebugTrayCommands
                 case "copy-terminal":
                     await client.CopyTerminalProxyAsync(timeout.Token).ConfigureAwait(false);
                     result = null;
+                    break;
+                case "proxy-menu":
+                    result = await client.GetProxyMenuAsync(timeout.Token).ConfigureAwait(false);
+                    break;
+                case "power-suspend":
+                    result = await client.SimulatePowerEventAsync(SystemPowerEventKind.Suspend, timeout.Token).ConfigureAwait(false);
+                    break;
+                case "power-resume":
+                    result = await client.SimulatePowerEventAsync(SystemPowerEventKind.Resume, timeout.Token).ConfigureAwait(false);
+                    break;
+                case "core-stop":
+                    result = await client.StopCoreAsync(timeout.Token).ConfigureAwait(false);
+                    break;
+                case "core-start":
+                    result = await client.EnsureCoreStartedAsync(timeout.Token).ConfigureAwait(false);
+                    break;
+                case var menu when menu.StartsWith("menu ", StringComparison.Ordinal):
+                    var menuRequest = JsonSerializer.Deserialize<TrayMenuDebugRequest>(menu["menu ".Length..])
+                        ?? throw new InvalidOperationException("Missing tray menu command.");
+                    result = await client.ExecuteMenuDebugAsync(menuRequest, timeout.Token).ConfigureAwait(false);
+                    break;
+                case var selection when selection.StartsWith("select-proxy ", StringComparison.Ordinal):
+                    var request = JsonSerializer.Deserialize<Stelliberty.Domain.Proxies.ProxyChangeRequest>(selection["select-proxy ".Length..])
+                        ?? throw new InvalidOperationException("Missing proxy selection.");
+                    await client.SelectProxyAsync(request, timeout.Token).ConfigureAwait(false);
+                    result = await client.GetProxyMenuAsync(timeout.Token).ConfigureAwait(false);
                     break;
                 case "stop":
                     await client.ShutdownAsync(timeout.Token).ConfigureAwait(false);

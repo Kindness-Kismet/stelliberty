@@ -16,10 +16,10 @@ public sealed class ProxySelectionRestorer(
     private const int LoadMaxAttempts = 20;
     private const int StableSnapshotCount = 3;
 
-    public async Task RestoreCurrentSubscriptionAsync(CancellationToken cancellationToken = default)
+    public async Task RestoreCurrentSubscriptionAsync(CancellationToken cancellationToken = default, bool preserveFixedSelections = false)
     {
         var subscriptionId = SuspendCoreSelectionImport("startup");
-        await RestoreSubscriptionAsync(subscriptionId, "startup", cancellationToken);
+        await RestoreSubscriptionAsync(subscriptionId, "startup", cancellationToken, preserveFixedSelections);
     }
 
     public string? SuspendCoreSelectionImport(string origin)
@@ -33,7 +33,8 @@ public sealed class ProxySelectionRestorer(
     public async Task RestoreSubscriptionAsync(
         string? subscriptionId,
         string origin,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool preserveFixedSelections = false)
     {
         syncState.DisableCoreSelectionImport();
         if (string.IsNullOrWhiteSpace(subscriptionId))
@@ -78,9 +79,11 @@ public sealed class ProxySelectionRestorer(
                     continue;
                 }
 
-                // 固定选择一律清空：核心自带 store-selected 会从它的缓存恢复固定。
                 if (group.UsesFixedSelection)
                 {
+                    // 重建界面不能清除用户刚从托盘固定的节点。
+                    if (preserveFixedSelections) continue;
+                    // 核心重建时清空固定选择，避免 store-selected 恢复旧固定项。
                     var cleared = await coreClient.ClearProxySelectionAsync(group.Name, cancellationToken);
                     if (cleared)
                     {

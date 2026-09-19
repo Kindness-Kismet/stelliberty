@@ -18,6 +18,7 @@ namespace Stelliberty.Tray;
 internal sealed class TrayBackgroundTasks : IAsyncDisposable
 {
     private readonly ITrayCoreRuntime _coreRuntime;
+    private readonly IProxyDelayResultSink _delayResults;
     private readonly JsonAppSettingsStore _settingsStore = new(new TrayPlatformDirectories());
     private readonly FileSubscriptionStore _subscriptions = new(TrayApplicationLayout.AppDataDirectory);
     private readonly FileSubscriptionSelectionStore _selection = new(TrayApplicationLayout.AppDataDirectory);
@@ -29,7 +30,11 @@ internal sealed class TrayBackgroundTasks : IAsyncDisposable
     private BackgroundTaskStatus _status = new(0, 0, null, null, new Dictionary<string, int>());
     private Task? _runTask;
 
-    public TrayBackgroundTasks(ITrayCoreRuntime coreRuntime) => _coreRuntime = coreRuntime;
+    public TrayBackgroundTasks(ITrayCoreRuntime coreRuntime, IProxyDelayResultSink delayResults)
+    {
+        _coreRuntime = coreRuntime;
+        _delayResults = delayResults;
+    }
 
     public event EventHandler<BackgroundTaskStatus>? StateChanged;
 
@@ -118,7 +123,7 @@ internal sealed class TrayBackgroundTasks : IAsyncDisposable
         {
             using var tester = new PipeCoreProxyDelayTester(TrayCoreEndpoints.Core, () => _settingsStore.Load().DelayTestUrl, 5000);
             var config = await new MihomoApiProxyConfigProvider(_proxyClient).LoadAsync(cancellationToken).ConfigureAwait(false);
-            var result = await new ProxyDelayService(tester).TestAllAsync(config, cancellationToken).ConfigureAwait(false);
+            var result = await new ProxyDelayService(tester, _delayResults).TestAllAsync(config, cancellationToken).ConfigureAwait(false);
             if (_selection.GetCurrentSubscriptionId() != subscriptionId)
             {
                 return;

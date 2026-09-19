@@ -489,7 +489,8 @@ class PostBuildTests:
         return json.loads(result.stdout)
 
     def wait_ui_closed(self) -> dict:
-        deadline = time.monotonic() + 15
+        # 隐藏回收等待 60 秒，另留 15 秒完成会话注销。
+        deadline = time.monotonic() + 75
         while time.monotonic() < deadline:
             state = self.tray_command("state")
             if state["UiPid"] is None:
@@ -503,6 +504,17 @@ class PostBuildTests:
         lightweight_mode = self.state_value(self.require("settings.app-behavior.state"), "lightweightMode") == "true"
         before = self.tray_command("state")
         self.command("hotkey.trigger window", allow_disconnect=True)
+        self.wait_for("window.state", contains=["visible=false"], timeout=15, interval=0.1)
+        # 连续触发需越过快捷键的 500 毫秒防重复间隔。
+        time.sleep(0.6)
+        if not self.tray_command("toggle-window"):
+            raise PostBuildTestError("The tray shortcut could not reopen the UI before release")
+        self.wait_for("window.state", contains=["visible=true"], timeout=15, interval=0.1)
+        reopened = self.tray_command("state")
+        if before["UiPid"] != reopened["UiPid"]:
+            raise PostBuildTestError("Reopening before the hidden delay did not reuse the UI process")
+        time.sleep(0.6)
+        self.command("hotkey.trigger window", allow_disconnect=True)
         if lightweight_mode:
             self.wait_ui_closed()
         else:
@@ -515,6 +527,8 @@ class PostBuildTests:
         ui_recreated = before["UiPid"] != after["UiPid"]
         if before["TrayPid"] != after["TrayPid"] or ui_recreated != lightweight_mode:
             raise PostBuildTestError("The shortcut did not follow the lightweight mode preference")
+        if before["Core"]["Snapshot"]["Pid"] != after["Core"]["Snapshot"]["Pid"]:
+            raise PostBuildTestError("Hiding the UI unexpectedly restarted the core")
 
     def try_probe_port(self) -> bool:
         try:

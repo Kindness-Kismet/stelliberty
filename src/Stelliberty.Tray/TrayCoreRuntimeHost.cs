@@ -21,6 +21,9 @@ namespace Stelliberty.Tray;
 
 internal interface ITrayCoreRuntime
 {
+    event EventHandler? ConfigurationChanging;
+    event EventHandler? ConfigurationChanged;
+
     event EventHandler<TrayCoreStatus>? StateChanged;
 
     event EventHandler<TrayCoreLogEntry>? LogReceived;
@@ -37,6 +40,9 @@ internal interface ITrayCoreRuntime
 
     Task RestartAsync(CancellationToken cancellationToken);
 
+    Task SelectProxyAsync(string? subscriptionId, Stelliberty.Domain.Proxies.ProxyChangeRequest request,
+        CancellationToken cancellationToken);
+
     Task<CoreApplyConfigResult> ApplyCurrentSettingsAsync(CancellationToken cancellationToken);
 
     Task<ServiceModeStatus> GetServiceModeStatusAsync(CancellationToken cancellationToken);
@@ -47,7 +53,7 @@ internal interface ITrayCoreRuntime
     Task<ServiceModeOperationResult> UninstallServiceModeAsync(CancellationToken cancellationToken);
 }
 
-internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
+internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 {
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(5);
     private readonly SemaphoreSlim _operationGate = new(1, 1);
@@ -83,6 +89,9 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public event EventHandler<TrayCoreStatus>? StateChanged;
 
+    public event EventHandler? ConfigurationChanging;
+    public event EventHandler? ConfigurationChanged;
+
     public event EventHandler<TrayCoreLogEntry>? LogReceived;
 
     public TrayCoreStatus CurrentStatus
@@ -98,6 +107,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<TrayCoreOperationResult> EnsureStartedAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -122,6 +132,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<TrayCoreOperationResult> StopAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(false, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -157,14 +168,42 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
         CoreApplyConfigRequest request,
         CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ThrowIfDisposed();
             var manager = RequireManager();
+            ConfigurationChanging?.Invoke(this, EventArgs.Empty);
             var result = await _restoringManager!.ApplyConfigAsync(request, cancellationToken).ConfigureAwait(false);
             UpdateStatus(await manager.GetSnapshotAsync(cancellationToken).ConfigureAwait(false));
             return result;
+        }
+        finally
+        {
+            ConfigurationChanged?.Invoke(this, EventArgs.Empty);
+            _operationGate.Release();
+        }
+    }
+
+    public async Task SelectProxyAsync(string? subscriptionId, Stelliberty.Domain.Proxies.ProxyChangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var selection = new FileSubscriptionSelectionStore(TrayApplicationLayout.AppDataDirectory);
+            if (CurrentStatus.Snapshot.State != CoreState.Running || selection.GetCurrentSubscriptionId() != subscriptionId)
+            {
+                throw new InvalidOperationException("Proxy configuration changed before selection.");
+            }
+            var config = await new MihomoApiProxyConfigProvider(_selectionClient).LoadAsync(cancellationToken).ConfigureAwait(false);
+            var service = new ProxySelectionService(_selectionClient,
+                new FileProxySelectionStore(TrayApplicationLayout.AppDataDirectory), selection);
+            if (await service.SelectNodeAsync(config, request.GroupName, request.ProxyName, true, cancellationToken).ConfigureAwait(false) is null)
+            {
+                throw new InvalidOperationException("Core rejected the proxy selection.");
+            }
         }
         finally
         {
@@ -174,6 +213,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task RestartAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -216,6 +256,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<ServiceModeOperationResult> InstallOrUpdateServiceModeAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -247,6 +288,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<ServiceModeOperationResult> UninstallServiceModeAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {

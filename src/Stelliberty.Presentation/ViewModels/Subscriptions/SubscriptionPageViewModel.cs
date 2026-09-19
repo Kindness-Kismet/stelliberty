@@ -174,6 +174,7 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
 
     public bool HasCurrentSubscription => CurrentSubscription is not null;
 
+    public PageLoadingState Loading { get; } = new();
     public bool IsEmptyVisible => _subscriptions.Count == 0;
 
     public bool IsEmptyTextVisible => IsEmptyVisible;
@@ -291,6 +292,7 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
 
         SyncCurrentSubscriptionRows();
         RaiseSubscriptionStateChanged();
+        Loading.CompleteInitialLoad();
     }
 
     public bool CurrentSubscriptionUsesAnyOverride(IReadOnlyCollection<string> overrideIds)
@@ -341,6 +343,7 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
     // 启动列表在后台加载并回到 UI 线程提交；失败只记日志。
     public async Task InitializeAsync()
     {
+        using var loading = Loading.BeginLoading();
         if (_subscriptionStore is null)
         {
             return;

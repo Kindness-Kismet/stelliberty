@@ -53,6 +53,8 @@ internal static class DesktopApplicationLayout
 
     public static string RunningLogFilePath => Path.Combine(AppLogsDirectory, PathConventions.RunningLogFileName);
 
+    public static string TrayRunningLogFilePath => Path.Combine(AppLogsDirectory, PathConventions.TrayRunningLogFileName);
+
     public static string SettingsFilePath => Path.Combine(AppDataDirectory, PathConventions.SettingsFileName);
 
     public static string TrayBinaryPath => Path.Combine(InstallRootDirectory, AppRuntimeNames.TrayBinaryName);

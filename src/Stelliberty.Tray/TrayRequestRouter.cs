@@ -20,6 +20,9 @@ internal sealed class TrayRequestRouter : IDisposable
     private readonly ISystemProxyController _systemProxy;
     private readonly ITrayHotkeyRuntime _hotkeys;
     private readonly TrayBackgroundTasks _backgroundTasks;
+    private readonly TrayProxyCatalog _proxyCatalog;
+    private readonly SystemPowerRecoveryService _powerRecovery;
+    private readonly SystemPowerMonitor _powerMonitor;
     private readonly ConcurrentDictionary<Guid, byte> _handshakes = new();
     private readonly ConcurrentDictionary<Guid, TrayIpcConnection> _connections = new();
     private readonly string _trayEpoch = Guid.NewGuid().ToString("N");
@@ -33,7 +36,10 @@ internal sealed class TrayRequestRouter : IDisposable
         ITrayRuntimeMonitor runtimeMonitor,
         ISystemProxyController systemProxy,
         ITrayHotkeyRuntime hotkeys,
-        TrayBackgroundTasks backgroundTasks)
+        TrayBackgroundTasks backgroundTasks,
+        TrayProxyCatalog proxyCatalog,
+        SystemPowerRecoveryService powerRecovery,
+        SystemPowerMonitor powerMonitor)
     {
         _lifetime = lifetime;
         _uiSessions = uiSessions;
@@ -43,6 +49,9 @@ internal sealed class TrayRequestRouter : IDisposable
         _systemProxy = systemProxy;
         _hotkeys = hotkeys;
         _backgroundTasks = backgroundTasks;
+        _proxyCatalog = proxyCatalog;
+        _powerRecovery = powerRecovery;
+        _powerMonitor = powerMonitor;
         _backgroundTasks.StateChanged += OnBackgroundChanged;
         _coreRuntime.StateChanged += OnCoreStateChanged;
         _coreRuntime.LogReceived += OnCoreLogReceived;
@@ -66,6 +75,16 @@ internal sealed class TrayRequestRouter : IDisposable
 
             return request.Method switch
             {
+                TrayProtocol.ProxyDelayScopeMethod => TrayIpcResult.Success(
+                    await _proxyCatalog.CaptureScopeAsync(cancellationToken).ConfigureAwait(false)),
+                TrayProtocol.ProxyDelayPublishMethod => await HandleProxyDelayAsync(request, cancellationToken).ConfigureAwait(false),
+#if DEBUG
+                TrayProtocol.PowerDebugMethod => HandlePowerDebug(request),
+                TrayProtocol.MenuDebugMethod => TrayIpcResult.Success(await _hotkeys.ExecuteMenuDebugAsync(
+                    request.DeserializeParameters<TrayMenuDebugRequest>(), cancellationToken).ConfigureAwait(false)),
+                TrayProtocol.ProxyMenuMethod => TrayIpcResult.Success(await _hotkeys.GetProxyMenuAsync(cancellationToken).ConfigureAwait(false)),
+                TrayProtocol.ProxySelectMethod => await HandleProxySelectAsync(request, cancellationToken).ConfigureAwait(false),
+#endif
                 TrayProtocol.HelloMethod => HandleHello(connection, request),
                 TrayProtocol.HealthMethod => await HandleHealthAsync(cancellationToken).ConfigureAwait(false),
                 TrayProtocol.BackgroundStatusMethod => TrayIpcResult.Success(_backgroundTasks.Status),
@@ -192,7 +211,9 @@ internal sealed class TrayRequestRouter : IDisposable
             _coreRuntime.CurrentStatus,
             _coreLogs.LatestSequence,
             _runtimeMonitor.GetSnapshot().SampledAt,
-            await _systemProxy.GetStatusAsync(cancellationToken).ConfigureAwait(false)));
+            await _systemProxy.GetStatusAsync(cancellationToken).ConfigureAwait(false),
+            _powerRecovery.Snapshot,
+            _powerMonitor.Status));
     }
 
     private async Task<UiRegisterResult> RegisterUiAsync(
@@ -257,6 +278,36 @@ internal sealed class TrayRequestRouter : IDisposable
         _trayEpoch,
         ["ui_session", "background_tray", "core_runtime", "core_log_journal", "runtime_traffic", "service_mode", "system_proxy", "global_hotkeys"],
         _coreRuntime.CurrentStatus.CoreGeneration);
+
+    private async Task<TrayIpcResult> HandleProxyDelayAsync(TrayIpcRequest request, CancellationToken cancellationToken)
+    {
+        var publication = request.DeserializeParameters<ProxyDelayPublication>();
+        if (string.IsNullOrWhiteSpace(publication.Scope) || string.IsNullOrWhiteSpace(publication.ProxyName)
+            || publication.Delay < -1)
+        {
+            return TrayIpcResult.Error("tray.invalid_params", "Invalid proxy delay publication.");
+        }
+        await _proxyCatalog.PublishAsync(publication, cancellationToken).ConfigureAwait(false);
+        return TrayIpcResult.Success(new { });
+    }
+
+#if DEBUG
+    private TrayIpcResult HandlePowerDebug(TrayIpcRequest request)
+    {
+        var kind = request.DeserializeParameters<TrayPowerDebugRequest>().Event;
+        if (!Enum.IsDefined(kind)) return TrayIpcResult.Error("tray.invalid_params", "Unknown power event.");
+        // 返回接收状态，恢复任务的最终结果由健康查询观察。
+        _ = _powerRecovery.HandleAsync(kind, "debug.simulated");
+        return TrayIpcResult.Success(_powerRecovery.Snapshot);
+    }
+
+    private async Task<TrayIpcResult> HandleProxySelectAsync(TrayIpcRequest request, CancellationToken cancellationToken)
+    {
+        var selection = request.DeserializeParameters<Stelliberty.Domain.Proxies.ProxyChangeRequest>();
+        await _hotkeys.SelectProxyAsync(selection.GroupName, selection.ProxyName, cancellationToken).ConfigureAwait(false);
+        return TrayIpcResult.Success(new { });
+    }
+#endif
 
     private async Task<TrayIpcResult> HandleCoreRestartAsync(CancellationToken cancellationToken)
     {

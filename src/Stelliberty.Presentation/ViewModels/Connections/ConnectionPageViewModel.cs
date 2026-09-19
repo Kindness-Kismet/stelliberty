@@ -61,6 +61,7 @@ public sealed class ConnectionPageViewModel : ViewModelBase, IDisposable
         CloseDetailCommand = new RelayCommand(CloseDetail);
     }
 
+    public PageLoadingState Loading { get; } = new();
     public IReadOnlyList<ConnectionInfo> Connections => _state.Connections;
 
     public IReadOnlyList<ConnectionInfo> FilteredConnections => _filteredConnections;
@@ -153,16 +154,20 @@ public sealed class ConnectionPageViewModel : ViewModelBase, IDisposable
 
         SyncSelectedConnectionDetail();
         RaiseConnectionStateChanged();
+        Loading.CompleteInitialLoad();
     }
 
     public async Task RefreshConnectionsAsync(CancellationToken cancellationToken = default)
     {
         // 单在途互斥：上一轮未归时跳过本轮，避免请求堆积与旧结果乱序覆盖
-        if (_coreClient is null || _isRefreshing)
+        if (_isRefreshing)
         {
             return;
         }
 
+        // 周期轮询保留已有内容，只为首次快照显示加载状态。
+        using var loading = Loading.HasLoaded ? null : Loading.BeginLoading();
+        if (_coreClient is null) return;
         _isRefreshing = true;
         try
         {

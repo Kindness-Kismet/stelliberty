@@ -1,9 +1,10 @@
 using Stelliberty.Application.Runtime;
+using Stelliberty.Application.Proxies;
 using Stelliberty.Infrastructure.Tray;
 
 namespace Stelliberty.Desktop.Services;
 
-internal sealed class DesktopTraySession : IDisposable
+internal sealed class DesktopTraySession : IDisposable, IProxyDelayResultSink
 {
     private readonly TrayIpcClient _client = new();
     private string? _sessionId;
@@ -52,6 +53,12 @@ internal sealed class DesktopTraySession : IDisposable
 
     public Task<BackgroundTaskStatus> GetBackgroundStatusAsync(CancellationToken cancellationToken) =>
         _client.GetBackgroundStatusAsync(cancellationToken);
+
+    public Task<string> CaptureScopeAsync(CancellationToken cancellationToken = default) =>
+        _client.CaptureProxyDelayScopeAsync(cancellationToken);
+
+    public Task PublishAsync(ProxyDelayPublication publication, CancellationToken cancellationToken = default) =>
+        _client.PublishProxyDelayAsync(publication, cancellationToken);
 
     private void OnBackgroundChanged(object? sender, BackgroundTaskStatus status) =>
         BackgroundChanged?.Invoke(this, status);

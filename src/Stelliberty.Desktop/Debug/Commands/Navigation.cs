@@ -1,5 +1,6 @@
 #if DEBUG
 using System.Globalization;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using AppNavigationPage = Stelliberty.Presentation.ViewModels.NavigationPage;
@@ -11,6 +12,10 @@ internal static partial class DebugCommands
 {
     private static async Task<string?> ExecuteNavigationCommandAsync(MainWindow window, string command)
     {
+        if (string.Equals(command, "page.state", StringComparison.OrdinalIgnoreCase))
+        {
+            return JsonSerializer.Serialize(window.CapturePageLoadingState());
+        }
         if (command.StartsWith("page.scroll y", StringComparison.OrdinalIgnoreCase))
         {
             return ReadOrSetCurrentPageScrollViewerY(window, command["page.scroll y".Length..].Trim()).ToString("0.###", CultureInfo.InvariantCulture);
@@ -24,6 +29,16 @@ internal static partial class DebugCommands
         }
 
         throw new InvalidOperationException($"Unknown page command: {command}");
+    }
+
+    public static async Task DelayPageInitializationAsync()
+    {
+        if (int.TryParse(Environment.GetEnvironmentVariable("STELLIBERTY_DEBUG_STARTUP_DELAY_MS"), out var delay)
+            && delay > 0)
+        {
+            // 仅调试启动延迟，最多 30 秒；不改变配置、核心或生产版行为。
+            await Task.Delay(Math.Min(delay, 30_000));
+        }
     }
 
     private static AppNavigationPage Navigate(MainWindow window, string spec)

@@ -4,7 +4,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-interoptopus_csharp = "^0.16.4"
+interoptopus_csharp = "^0.16.5"
 hub = { path = "../hub" }
 
 [lints]

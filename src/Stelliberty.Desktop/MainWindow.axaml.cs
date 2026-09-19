@@ -27,12 +27,17 @@ namespace Stelliberty.Desktop;
 
 public sealed partial class MainWindow : Window
 {
+    // 隐藏后统一等待该时长：轻量模式结束 UI 进程，常规模式回收页面视觉树。
+    private static readonly TimeSpan HiddenReleaseDelay = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan PageLoadingMinVisible = TimeSpan.FromMilliseconds(300);
     private readonly WindowAppearanceService _windowAppearanceService = new();
     private readonly WindowStateService _windowStateService;
     private readonly SystemAccentColorService _systemAccentColorService = new();
     private readonly BitmapCache _proxyPageBitmapCache = new() { SnapsToDevicePixels = true };
     private readonly Dictionary<AppNavigationPage, ContentControl> _pageHosts = new();
+    private readonly Dictionary<AppNavigationPage, Dictionary<string, Vector>> _pageScrollOffsets = new();
+    private readonly DispatcherTimer _hiddenReleaseTimer;
+    private IReadOnlyDictionary<SettingsSubPage, Vector>? _settingsScrollOffsets;
     private bool _pageHostsReady;
     private ContentControl? _visiblePageHost;
     private ContentControl? _pendingPageHost;
@@ -57,6 +62,8 @@ public sealed partial class MainWindow : Window
     public MainWindow(IAppSettingsStore? settingsStore, AppSettings? settings)
     {
         _windowStateService = new WindowStateService(settingsStore, settings);
+        _hiddenReleaseTimer = new DispatcherTimer { Interval = HiddenReleaseDelay };
+        _hiddenReleaseTimer.Tick += OnHiddenReleaseTimerTick;
         InitializeComponent();
         ApplyPlatformWindowDecorations();
         DataContextChanged += OnDataContextChanged;
@@ -176,11 +183,28 @@ public sealed partial class MainWindow : Window
 
     private void OnAttachedViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName != nameof(MainWindowViewModel.CurrentPage)
-            || sender is not MainWindowViewModel viewModel)
+        if (sender is not MainWindowViewModel viewModel)
         {
             return;
         }
+
+        if (args.PropertyName == nameof(MainWindowViewModel.IsCurrentPageLoading))
+        {
+            if (!IsVisible) return;
+            if (_pendingPageHost is { } pending)
+            {
+                if (pending.Content is not null)
+                {
+                    CompletePageLoadingThenEnter(_visiblePageHost, pending, _pageTransitionVersion);
+                }
+            }
+            else if (viewModel.IsCurrentPageLoading && _visiblePageHost is not null)
+            {
+                AnimatePageTransition(viewModel.CurrentPage);
+            }
+            return;
+        }
+        if (args.PropertyName != nameof(MainWindowViewModel.CurrentPage)) return;
 
         AnimatePageTransition(viewModel.CurrentPage);
 #if DEBUG
@@ -234,6 +258,7 @@ public sealed partial class MainWindow : Window
     {
         if (isVisible)
         {
+            if (_pageLoadingShownAt != 0) return;
             _pageLoadingShownAt = Stopwatch.GetTimestamp();
             PageLoadingIndicator.Start();
             PageLoadingOverlay.Opacity = 1;
@@ -268,21 +293,30 @@ public sealed partial class MainWindow : Window
             other.IsVisible = false;
         }
 
+        _visiblePageHost = null;
+        if (_attachedViewModel?.IsCurrentPageLoading == true)
+        {
+            AnimatePageTransition(page);
+            return;
+        }
+
         EnsurePageLoaded(page);
         host.IsVisible = true;
         ShowPageHost(host);
         _visiblePageHost = host;
         ActivatePageHost(host);
+        PreparePageLayout(page, host);
     }
 
     private void AnimatePageTransition(AppNavigationPage page)
     {
-        if (!_pageHostsReady || !_pageHosts.TryGetValue(page, out var nextHost))
+        if (!IsVisible || !_pageHostsReady || !_pageHosts.TryGetValue(page, out var nextHost))
         {
             return;
         }
 
-        if (ReferenceEquals(nextHost, _visiblePageHost) && nextHost.Content is not null)
+        var isDataLoading = _attachedViewModel?.IsCurrentPageLoading == true;
+        if (ReferenceEquals(nextHost, _visiblePageHost) && nextHost.Content is not null && !isDataLoading)
         {
             CancelPendingPageTransition();
             ShowPageHost(nextHost);
@@ -299,7 +333,7 @@ public sealed partial class MainWindow : Window
             previousHost.IsHitTestVisible = false;
         }
 
-        if (nextHost.Content is not null)
+        if (nextHost.Content is not null && !isDataLoading)
         {
             // 缓存页已有视觉树，直接启动过渡，避免等待空闲合成器唤醒。
             PrepareNextHostEnterState(nextHost);
@@ -320,6 +354,14 @@ public sealed partial class MainWindow : Window
         }
 
         SetPageLoadingVisible(true);
+        if (nextHost.Content is not null)
+        {
+            // 缓存页立即准备显示状态，避免数据就绪通知先于后台布局回调。
+            PrepareNextHostEnterState(nextHost);
+            ActivatePageHost(nextHost);
+            return;
+        }
+
         Dispatcher.UIThread.Post(
             () =>
             {
@@ -356,6 +398,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // 视觉树创建与业务加载分别就绪，数据未返回时保持遮罩。
+        if (_attachedViewModel?.IsCurrentPageLoading == true) return;
+
         var remaining = PageLoadingMinVisible - Stopwatch.GetElapsedTime(_pageLoadingShownAt);
         if (remaining <= TimeSpan.Zero)
         {
@@ -367,12 +412,7 @@ public sealed partial class MainWindow : Window
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            if (version != _pageTransitionVersion || !ReferenceEquals(_pendingPageHost, nextHost))
-            {
-                return;
-            }
-
-            StartPageTransition(previousHost, nextHost, version);
+            CompletePageLoadingThenEnter(previousHost, nextHost, version);
         };
         timer.Start();
     }
@@ -384,6 +424,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        PreparePageLayout(_attachedViewModel!.CurrentPage, nextHost);
         SetPageLoadingVisible(false);
         _pendingPageHost = null;
         _visiblePageHost = nextHost;
@@ -492,6 +533,21 @@ public sealed partial class MainWindow : Window
     }
 
 #if DEBUG
+    internal object CapturePageLoadingState()
+    {
+        var viewModel = _attachedViewModel!;
+        var host = _pageHosts[viewModel.CurrentPage];
+        return new
+        {
+            Page = viewModel.CurrentPage.ToString(),
+            IsDataLoading = viewModel.IsCurrentPageLoading,
+            IsOverlayVisible = IsVisible && PageLoadingOverlay.Opacity > 0,
+            IsContentVisible = IsVisible && host.IsVisible && host.Opacity > 0,
+            Pages = Enum.GetValues<AppNavigationPage>().ToDictionary(
+                page => page.ToString(), page => viewModel.GetPageLoadingState(page)?.IsLoading == true),
+        };
+    }
+
     internal Task WaitForPageReadyAsync(AppNavigationPage page)
     {
         if (!_pageHosts.TryGetValue(page, out var host))
@@ -504,7 +560,7 @@ public sealed partial class MainWindow : Window
         return completion.Task;
     }
 
-    // 调试协议在目标页进入视觉树后才响应，避免自动化查询抢占首次创建。
+    // 数据就绪且页面开始显示后才响应，避免查询抢占首次加载或同页刷新。
     private void WaitForPageReadyOnNextFrame(
         AppNavigationPage page,
         ContentControl host,
@@ -520,8 +576,11 @@ public sealed partial class MainWindow : Window
                 }
 
                 if (ReferenceEquals(_visiblePageHost, host)
+                    && _pendingPageHost is null
+                    && !_attachedViewModel.IsCurrentPageLoading
                     && host.Content is Control
-                    && host.IsVisible)
+                    && host.IsVisible
+                    && host.Opacity > 0)
                 {
                     completion.TrySetResult();
                     return;
@@ -729,14 +788,7 @@ public sealed partial class MainWindow : Window
         }
 
         _windowStateService.SaveNow();
-        if (DataContext is MainWindowViewModel { AppBehavior.IsLightweightModeEnabled: true })
-        {
-            RequestUiShutdown();
-        }
-        else
-        {
-            Hide();
-        }
+        Hide();
     }
 
     private void BeginShutdown(bool shouldShutdownTray)
@@ -822,6 +874,8 @@ public sealed partial class MainWindow : Window
     {
         SetPageLoadingVisible(false);
         CancelPendingPageTransition();
+        _hiddenReleaseTimer.Stop();
+        _hiddenReleaseTimer.Tick -= OnHiddenReleaseTimerTick;
         CloseAccentPicker();
         _visiblePageHost = null;
         ClearPageHostContents();
@@ -856,12 +910,157 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // 隐藏回收前记录滚动位置，重建后按 AutomationId 还原。
+    private void CapturePageScrollOffsets()
+    {
+        foreach (var (page, host) in _pageHosts)
+        {
+            if (page == AppNavigationPage.Settings || host.Content is not Control content)
+            {
+                continue;
+            }
+
+            // 尚未重建的页面保留上次快照，已重建的页面以当前状态覆盖。
+            _pageScrollOffsets.Remove(page);
+            var offsets = content.GetVisualDescendants()
+                .OfType<ScrollViewer>()
+                .Select(scrollViewer => (Id: AutomationProperties.GetAutomationId(scrollViewer), scrollViewer.Offset))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Id) && (item.Offset.X > 0 || item.Offset.Y > 0))
+                .ToDictionary(item => item.Id!, item => item.Offset, StringComparer.Ordinal);
+            if (offsets.Count > 0)
+            {
+                _pageScrollOffsets[page] = offsets;
+            }
+        }
+
+        if (_pageHosts.TryGetValue(AppNavigationPage.Settings, out var settingsHost)
+            && settingsHost.Content is SettingsView settingsView)
+        {
+            _settingsScrollOffsets = settingsView.CaptureScrollOffsets();
+        }
+    }
+
+    private void PreparePageLayout(AppNavigationPage page, ContentControl host)
+    {
+        if (page == AppNavigationPage.Settings && host.Content is SettingsView settingsView)
+        {
+            if (_settingsScrollOffsets is null)
+            {
+                return;
+            }
+
+            host.UpdateLayout();
+            settingsView.RestoreScrollOffsets(_settingsScrollOffsets);
+            _settingsScrollOffsets = null;
+            return;
+        }
+
+        if (!_pageScrollOffsets.Remove(page, out var offsets)
+            || host.Content is not Control content)
+        {
+            return;
+        }
+
+        host.UpdateLayout();
+        var restoredCount = 0;
+        foreach (var scrollViewer in content.GetVisualDescendants().OfType<ScrollViewer>())
+        {
+            var automationId = AutomationProperties.GetAutomationId(scrollViewer);
+            if (automationId is null || !offsets.TryGetValue(automationId, out var offset))
+            {
+                continue;
+            }
+
+            scrollViewer.Offset = offset;
+            restoredCount++;
+        }
+
+        if (restoredCount > 0)
+        {
+            host.UpdateLayout();
+        }
+    }
+
+    private void OnHiddenReleaseTimerTick(object? sender, EventArgs args)
+    {
+        _hiddenReleaseTimer.Stop();
+        if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
+        {
+            return;
+        }
+
+        if (DataContext is MainWindowViewModel { AppBehavior.IsLightweightModeEnabled: true })
+        {
+            RequestUiShutdown();
+            return;
+        }
+
+        ReleaseHiddenPageViews();
+    }
+
+    private void ReleaseHiddenPageViews()
+    {
+        CapturePageScrollOffsets();
+        _visiblePageHost = null;
+        ClearPageHostContents();
+        var releasedViewCount = 0;
+        if (TryGetPageConverter(out var converter))
+        {
+            releasedViewCount = converter.ClearCache();
+        }
+
+        if (releasedViewCount > 0)
+        {
+            AppLogger.Debug($"Released {releasedViewCount} hidden page views");
+        }
+
+        Dispatcher.UIThread.Post(CollectHiddenMemory, DispatcherPriority.Background);
+    }
+
+    private void CollectHiddenMemory()
+    {
+        if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
+        {
+            return;
+        }
+
+        // 等视觉树解除引用后再压缩托管堆，窗口重新显示时跳过。
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+    }
+
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs args)
     {
         if (args.Property == WindowStateProperty)
         {
             UpdateWindowStateVisuals();
         }
+
+        if (args.Property != Visual.IsVisibleProperty)
+        {
+            return;
+        }
+
+        if (IsVisible)
+        {
+            _hiddenReleaseTimer.Stop();
+            if (_attachedViewModel is not null)
+            {
+                // 隐藏可能中断首次加载，恢复时按当前导航重建完整显示状态。
+                ShowInitialPage(_attachedViewModel.CurrentPage);
+            }
+
+            return;
+        }
+
+        if (_isShutdownRequested || _isShutdownPreparing)
+        {
+            return;
+        }
+
+        CancelPendingPageTransition();
+        DeactivatePageHost(_visiblePageHost);
+        _hiddenReleaseTimer.Stop();
+        _hiddenReleaseTimer.Start();
     }
 
     private void OnCustomAccentRequested(object? sender, EventArgs args)

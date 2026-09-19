@@ -1,0 +1,26 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="TextBlock.delay-badge">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource AppTextTertiaryBrush}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="TextBlock.delay-badge[Tag=delay-good]">
+    <Setter Property="Foreground" Value="{DynamicResource AppSuccessBrush}" />
+  </Style>
+  <Style Selector="TextBlock.delay-badge[Tag=delay-mid]">
+    <Setter Property="Foreground" Value="{DynamicResource TagInfoForegroundBrush}" />
+  </Style>
+  <Style Selector="TextBlock.delay-badge[Tag=delay-slow]">
+    <Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}" />
+  </Style>
+  <Style Selector="TextBlock.delay-badge[Tag=delay-bad]">
+    <Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}" />
+  </Style>
+</Styles>

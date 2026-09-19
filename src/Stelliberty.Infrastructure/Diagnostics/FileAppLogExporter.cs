@@ -1,19 +1,19 @@
+using System.Text;
 using Stelliberty.Application.Diagnostics;
 
 namespace Stelliberty.Infrastructure.Diagnostics;
 
-public sealed class FileAppLogExporter(string logFilePath) : IAppLogExporter
+public sealed class FileAppLogExporter(params string[] logFilePaths) : IAppLogExporter
 {
-    // 路径有效性由调用方保证；无效路径让 IO 抛出，由上层转为导出失败
     public async Task ExportAsync(string exportPath, CancellationToken cancellationToken = default)
     {
-        await using var source = new FileStream(
-            logFilePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete,
-            bufferSize: 81920,
-            useAsync: true);
+        var fullExportPath = Path.GetFullPath(exportPath);
+        // 禁止将导出目标指向运行日志，避免清空仍在写入的诊断信息。
+        if (logFilePaths.Any(path => string.Equals(Path.GetFullPath(path), fullExportPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new IOException("The export path must be different from the running log paths.");
+        }
+
         await using var target = new FileStream(
             exportPath,
             FileMode.Create,
@@ -21,6 +21,19 @@ public sealed class FileAppLogExporter(string logFilePath) : IAppLogExporter
             FileShare.None,
             bufferSize: 81920,
             useAsync: true);
-        await source.CopyToAsync(target, cancellationToken);
+        foreach (var logFilePath in logFilePaths)
+        {
+            await using var source = new FileStream(
+                logFilePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                bufferSize: 81920,
+                useAsync: true);
+            var header = Encoding.UTF8.GetBytes($"===== {Path.GetFileName(logFilePath)} ====={Environment.NewLine}");
+            await target.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+            await source.CopyToAsync(target, cancellationToken).ConfigureAwait(false);
+            await target.WriteAsync(Encoding.UTF8.GetBytes(Environment.NewLine), cancellationToken).ConfigureAwait(false);
+        }
     }
 }
