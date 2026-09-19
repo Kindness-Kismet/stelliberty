@@ -53,7 +53,7 @@ internal interface ITrayCoreRuntime
     Task<ServiceModeOperationResult> UninstallServiceModeAsync(CancellationToken cancellationToken);
 }
 
-internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
+internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 {
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(5);
     private readonly SemaphoreSlim _operationGate = new(1, 1);
@@ -107,6 +107,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<TrayCoreOperationResult> EnsureStartedAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -131,6 +132,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<TrayCoreOperationResult> StopAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(false, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -166,6 +168,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
         CoreApplyConfigRequest request,
         CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -210,6 +213,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task RestartAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -252,6 +256,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<ServiceModeOperationResult> InstallOrUpdateServiceModeAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -283,6 +288,7 @@ internal sealed class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisposable
 
     public async Task<ServiceModeOperationResult> UninstallServiceModeAsync(CancellationToken cancellationToken)
     {
+        RecordCoreRunIntent(true, invalidateRecovery: true);
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {

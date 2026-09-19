@@ -1,6 +1,7 @@
 using Avalonia.Controls.ApplicationLifetimes;
 using Stelliberty.Application.Diagnostics;
 using Stelliberty.Application.Platform;
+using Stelliberty.Application.Runtime;
 using Stelliberty.Infrastructure.Platform;
 using Stelliberty.Infrastructure.Proxies;
 using Stelliberty.Infrastructure.Tray;
@@ -38,6 +39,9 @@ internal sealed class TrayRuntime
                 new PipeCoreProxyClient(TrayCoreEndpoints.Core));
             await using var systemProxy = new LocalSystemProxyController(
                 SystemProxyServiceFactory.Create(CurrentSystemProxyPlatform(), TrayApplicationLayout.AppDataDirectory));
+            await using var powerRecovery = new SystemPowerRecoveryService(
+                new TrayPowerRecoveryRuntime(coreRuntime, systemProxy, CurrentSystemProxyPlatform()));
+            await using var powerMonitor = new SystemPowerMonitor(powerRecovery);
             using var sessionEndCleanup = new SessionEndCleanupService(
                 () => systemProxy.Shutdown(), coreRuntime.SetShutdownSuspension);
             await using var trayMenu = new TrayMenuService(
@@ -57,12 +61,15 @@ internal sealed class TrayRuntime
                 systemProxy,
                 trayMenu,
                 backgroundTasks,
-                proxyCatalog);
+                proxyCatalog,
+                powerRecovery,
+                powerMonitor);
             await using var server = new TrayIpcServer(
                 TrayEndpoint.Current,
                 router.HandleAsync,
                 router.OnConnectionClosedAsync);
             sessionEndCleanup.Start();
+            await powerMonitor.StartAsync().ConfigureAwait(false);
             runtimeMonitor.Start(lifetime.StoppingToken);
             server.Start(lifetime.StoppingToken);
             var startup = StartCoreAsync(coreRuntime, systemProxy, lifetime.StoppingToken);

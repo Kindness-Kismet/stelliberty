@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Stelliberty.Infrastructure.Tray;
 using Stelliberty.Application.Platform;
+using Stelliberty.Application.Runtime;
 
 namespace Stelliberty.Tray;
 
@@ -42,6 +43,18 @@ internal static class DebugTrayCommands
                     break;
                 case "proxy-menu":
                     result = await client.GetProxyMenuAsync(timeout.Token).ConfigureAwait(false);
+                    break;
+                case "power-suspend":
+                    result = await client.SimulatePowerEventAsync(SystemPowerEventKind.Suspend, timeout.Token).ConfigureAwait(false);
+                    break;
+                case "power-resume":
+                    result = await client.SimulatePowerEventAsync(SystemPowerEventKind.Resume, timeout.Token).ConfigureAwait(false);
+                    break;
+                case "core-stop":
+                    result = await client.StopCoreAsync(timeout.Token).ConfigureAwait(false);
+                    break;
+                case "core-start":
+                    result = await client.EnsureCoreStartedAsync(timeout.Token).ConfigureAwait(false);
                     break;
                 case var menu when menu.StartsWith("menu ", StringComparison.Ordinal):
                     var menuRequest = JsonSerializer.Deserialize<TrayMenuDebugRequest>(menu["menu ".Length..])

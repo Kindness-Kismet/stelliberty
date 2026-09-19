@@ -2,6 +2,7 @@
 
 pub mod channel;
 mod core;
+mod heartbeat;
 mod installer;
 mod ipc;
 mod logging;

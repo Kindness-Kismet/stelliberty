@@ -126,6 +126,9 @@ public sealed class TrayIpcClient : IDisposable, IAsyncDisposable
             cancellationToken);
 
 #if DEBUG
+    public Task<JsonElement> SimulatePowerEventAsync(SystemPowerEventKind kind, CancellationToken cancellationToken) =>
+        RequestAsync<JsonElement>(TrayProtocol.PowerDebugMethod, new TrayPowerDebugRequest(kind), cancellationToken);
+
     public Task<JsonElement> ExecuteMenuDebugAsync(TrayMenuDebugRequest request, CancellationToken cancellationToken) =>
         RequestAsync<JsonElement>(TrayProtocol.MenuDebugMethod, request, cancellationToken);
 

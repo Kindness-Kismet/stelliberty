@@ -7,6 +7,7 @@ use tokio::sync::{Mutex, oneshot};
 
 use crate::channel::{command_endpoint, service_name};
 use crate::core::{CoreManager, CoreState, StartCoreRequest};
+use crate::heartbeat::HeartbeatWatchdog;
 use crate::logging;
 use crate::protocol::{ServiceCommand, ServiceResponse};
 use crate::service_version;
@@ -14,8 +15,6 @@ use hub::infra::core_api::ApiError;
 
 const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
-const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(70);
-const HEARTBEAT_CHECK_INTERVAL: Duration = Duration::from_secs(45);
 
 #[derive(Clone)]
 pub struct ServiceState {
@@ -162,20 +161,26 @@ impl ServiceState {
     }
 
     pub async fn monitor_heartbeat(&self) {
+        let mut watchdog = HeartbeatWatchdog::new(Instant::now());
         loop {
-            tokio::time::sleep(HEARTBEAT_CHECK_INTERVAL).await;
+            tokio::time::sleep(crate::heartbeat::CHECK_INTERVAL).await;
+            let now = Instant::now();
+            if let Some(gap) = watchdog.observe(now) {
+                logging::info(format!(
+                    "Heartbeat watchdog resumed after scheduler gap: gap_ms={} grace_s={}",
+                    gap.as_millis(),
+                    crate::heartbeat::TIMEOUT.as_secs()
+                ));
+            }
             self.core.cleanup_orphan_cores().await;
-            let should_stop_core = self
-                .last_heartbeat
-                .lock()
-                .await
-                .is_some_and(|instant| instant.elapsed() > HEARTBEAT_TIMEOUT);
-            if !should_stop_core {
+            // 超时停止与续接互斥，避免新心跳先恢复核心、旧判定随后又将其停止。
+            let mut heartbeat = self.last_heartbeat.lock().await;
+            if !watchdog.should_expire(Instant::now(), *heartbeat) {
                 continue;
             }
 
             self.core.stop_for_heartbeat_timeout().await;
-            *self.last_heartbeat.lock().await = None;
+            *heartbeat = None;
         }
     }
 

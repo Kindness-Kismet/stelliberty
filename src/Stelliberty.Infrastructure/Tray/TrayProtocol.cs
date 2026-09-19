@@ -8,7 +8,7 @@ namespace Stelliberty.Infrastructure.Tray;
 
 public static class TrayProtocol
 {
-    public const int Version = 8;
+    public const int Version = 9;
 
     public const string HelloMethod = "tray.hello";
     public const string HealthMethod = "tray.get_health";
@@ -38,6 +38,7 @@ public static class TrayProtocol
     public const string ProxyMenuMethod = "tray.proxy_menu";
     public const string ProxySelectMethod = "tray.select_proxy";
     public const string MenuDebugMethod = "tray.debug_menu";
+    public const string PowerDebugMethod = "tray.debug_power";
 #endif
     public const string UiActivateMethod = "ui.activate";
     public const string UiRegisterMethod = "ui.register";
@@ -57,6 +58,7 @@ public sealed record TrayHelloRequest(
 
 #if DEBUG
 public sealed record TrayMenuDebugRequest(string Action, string? AutomationId = null);
+public sealed record TrayPowerDebugRequest(SystemPowerEventKind Event);
 #endif
 
 public sealed record TrayHello(
@@ -76,7 +78,9 @@ public sealed record TrayHealth(
     TrayCoreStatus Core,
     long LatestCoreLogSequence,
     DateTimeOffset? LastRuntimeSampledAt,
-    SystemProxyStatus SystemProxy);
+    SystemProxyStatus SystemProxy,
+    SystemPowerRecoverySnapshot PowerRecovery,
+    string PowerMonitorStatus);
 
 public sealed record TrayCoreStatus(CoreSnapshot Snapshot, long CoreGeneration);
 

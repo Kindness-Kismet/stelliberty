@@ -101,6 +101,29 @@ public sealed class LocalSystemProxyController : ISystemProxyController, IDispos
         }
     }
 
+    public async Task<SystemProxyApplyResult> ReapplyOwnedAsync(
+        SystemProxyApplicationRequest request, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        var version = Volatile.Read(ref _operationVersion);
+        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var current = CurrentStatus;
+            // 自动恢复不推进版本，用户在恢复期间提交的开关操作始终优先。
+            if (version != Volatile.Read(ref _operationVersion) || !current.IsEnabled || !current.IsOwned)
+            {
+                return new(true, "System proxy reapply is not required.", current);
+            }
+            var result = await Task.Run(() => _service.Enable(request), cancellationToken).ConfigureAwait(false);
+            return new(result.IsSuccess, result.Message, CurrentStatus);
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
+
     private SystemProxyStatus CurrentStatus
     {
         get
