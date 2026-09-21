@@ -20,7 +20,7 @@ internal sealed class TrayRequestRouter : IDisposable
     private readonly ISystemProxyController _systemProxy;
     private readonly ITrayHotkeyRuntime _hotkeys;
     private readonly TrayBackgroundTasks _backgroundTasks;
-    private readonly TrayProxyCatalog _proxyCatalog;
+    private readonly IProxyDelayResultSink _delayResults;
     private readonly SystemPowerRecoveryService _powerRecovery;
     private readonly SystemPowerMonitor _powerMonitor;
     private readonly ConcurrentDictionary<Guid, byte> _handshakes = new();
@@ -37,7 +37,7 @@ internal sealed class TrayRequestRouter : IDisposable
         ISystemProxyController systemProxy,
         ITrayHotkeyRuntime hotkeys,
         TrayBackgroundTasks backgroundTasks,
-        TrayProxyCatalog proxyCatalog,
+        IProxyDelayResultSink delayResults,
         SystemPowerRecoveryService powerRecovery,
         SystemPowerMonitor powerMonitor)
     {
@@ -49,7 +49,7 @@ internal sealed class TrayRequestRouter : IDisposable
         _systemProxy = systemProxy;
         _hotkeys = hotkeys;
         _backgroundTasks = backgroundTasks;
-        _proxyCatalog = proxyCatalog;
+        _delayResults = delayResults;
         _powerRecovery = powerRecovery;
         _powerMonitor = powerMonitor;
         _backgroundTasks.StateChanged += OnBackgroundChanged;
@@ -76,14 +76,10 @@ internal sealed class TrayRequestRouter : IDisposable
             return request.Method switch
             {
                 TrayProtocol.ProxyDelayScopeMethod => TrayIpcResult.Success(
-                    await _proxyCatalog.CaptureScopeAsync(cancellationToken).ConfigureAwait(false)),
+                    await _delayResults.CaptureScopeAsync(cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.ProxyDelayPublishMethod => await HandleProxyDelayAsync(request, cancellationToken).ConfigureAwait(false),
 #if DEBUG
                 TrayProtocol.PowerDebugMethod => HandlePowerDebug(request),
-                TrayProtocol.MenuDebugMethod => TrayIpcResult.Success(await _hotkeys.ExecuteMenuDebugAsync(
-                    request.DeserializeParameters<TrayMenuDebugRequest>(), cancellationToken).ConfigureAwait(false)),
-                TrayProtocol.ProxyMenuMethod => TrayIpcResult.Success(await _hotkeys.GetProxyMenuAsync(cancellationToken).ConfigureAwait(false)),
-                TrayProtocol.ProxySelectMethod => await HandleProxySelectAsync(request, cancellationToken).ConfigureAwait(false),
 #endif
                 TrayProtocol.HelloMethod => HandleHello(connection, request),
                 TrayProtocol.HealthMethod => await HandleHealthAsync(cancellationToken).ConfigureAwait(false),
@@ -287,7 +283,7 @@ internal sealed class TrayRequestRouter : IDisposable
         {
             return TrayIpcResult.Error("tray.invalid_params", "Invalid proxy delay publication.");
         }
-        await _proxyCatalog.PublishAsync(publication, cancellationToken).ConfigureAwait(false);
+        await _delayResults.PublishAsync(publication, cancellationToken).ConfigureAwait(false);
         return TrayIpcResult.Success(new { });
     }
 
@@ -299,13 +295,6 @@ internal sealed class TrayRequestRouter : IDisposable
         // 返回接收状态，恢复任务的最终结果由健康查询观察。
         _ = _powerRecovery.HandleAsync(kind, "debug.simulated");
         return TrayIpcResult.Success(_powerRecovery.Snapshot);
-    }
-
-    private async Task<TrayIpcResult> HandleProxySelectAsync(TrayIpcRequest request, CancellationToken cancellationToken)
-    {
-        var selection = request.DeserializeParameters<Stelliberty.Domain.Proxies.ProxyChangeRequest>();
-        await _hotkeys.SelectProxyAsync(selection.GroupName, selection.ProxyName, cancellationToken).ConfigureAwait(false);
-        return TrayIpcResult.Success(new { });
     }
 #endif
 

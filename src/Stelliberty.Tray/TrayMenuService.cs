@@ -12,7 +12,6 @@ using Stelliberty.Infrastructure.Localization;
 using Stelliberty.Infrastructure.Platform;
 using Stelliberty.Infrastructure.Proxies;
 using Stelliberty.Infrastructure.Settings;
-using Stelliberty.Infrastructure.Tray;
 
 namespace Stelliberty.Tray;
 
@@ -28,10 +27,6 @@ internal interface ITrayHotkeyRuntime
     Task ReleaseSuppressionAsync(Guid connectionId);
 
 #if DEBUG
-    Task<object> ExecuteMenuDebugAsync(TrayMenuDebugRequest request, CancellationToken cancellationToken);
-    Task<object> GetProxyMenuAsync(CancellationToken cancellationToken);
-    Task SelectProxyAsync(string groupName, string nodeName, CancellationToken cancellationToken);
-
     Task CopyTerminalProxyAsync(CancellationToken cancellationToken);
 
     Task<bool> SimulateActivationAsync(GlobalHotkeyAction action, CancellationToken cancellationToken);
@@ -42,7 +37,6 @@ internal sealed class TrayMenuService(
     UiSessionManager uiSessions,
     ITrayCoreRuntime coreRuntime,
     ITrayRuntimeMonitor runtimeMonitor,
-    TrayProxyCatalog proxyCatalog,
     ISystemProxyController systemProxy,
     TrayLifetime lifetime) : ITrayHotkeyRuntime, IAsyncDisposable
 {
@@ -65,10 +59,6 @@ internal sealed class TrayMenuService(
     private NativeMenuItem? _copyCmdItem;
     private NativeMenuItem? _copyBashItem;
     private NativeMenuItem? _outboundItem;
-    private TrayProxyMenu? _proxyMenu;
-#if DEBUG
-    private DebugTrayMenu? _debugMenu;
-#endif
     private NativeMenuItem? _outboundRuleItem;
     private NativeMenuItem? _outboundGlobalItem;
     private NativeMenuItem? _outboundDirectItem;
@@ -115,10 +105,6 @@ internal sealed class TrayMenuService(
             Menu = new NativeMenu { _outboundRuleItem, _outboundGlobalItem, _outboundDirectItem }
         };
 
-        _proxyMenu = new TrayProxyMenu(_localization.GetString,
-            (scope, group, node) => ExecuteRuntimeAsync("select proxy",
-                token => proxyCatalog.SelectAsync(scope, group, node, token)));
-
         _systemProxyItem = new NativeMenuItem { ToggleType = MenuItemToggleType.CheckBox };
         _systemProxyItem.Click += OnSystemProxyClicked;
         _tunItem = new NativeMenuItem { ToggleType = MenuItemToggleType.CheckBox };
@@ -135,7 +121,6 @@ internal sealed class TrayMenuService(
             Menu = new NativeMenu
             {
                 _showItem,
-                _proxyMenu.Item,
                 new NativeMenuItemSeparator(),
                 _copyItem,
                 new NativeMenuItemSeparator(),
@@ -152,9 +137,6 @@ internal sealed class TrayMenuService(
         _trayIcon.Clicked += OnTrayIconClicked;
         _trayIcon.ToolTipText = AppMetadata.DisplayName;
         TrayIcon.SetIcons(Avalonia.Application.Current!, [_trayIcon]);
-#if DEBUG
-        _debugMenu = new DebugTrayMenu(_trayIcon, GetMenuAutomationIds);
-#endif
 
         coreRuntime.StateChanged += OnStateChanged;
         systemProxy.StatusChanged += OnSystemProxyChanged;
@@ -197,46 +179,6 @@ internal sealed class TrayMenuService(
             () => SetSuppressedOnUiThreadAsync(connectionId, false, CancellationToken.None));
 
 #if DEBUG
-    public Task<object> ExecuteMenuDebugAsync(TrayMenuDebugRequest request, CancellationToken cancellationToken) =>
-        _debugMenu!.ExecuteAsync(request, cancellationToken);
-
-    private IReadOnlyDictionary<NativeMenuItem, string> GetMenuAutomationIds()
-    {
-        var ids = _proxyMenu!.GetAutomationIds();
-        ids.Add(_showItem!, "Tray.ShowWindow");
-        ids.Add(_copyItem!, "Tray.TerminalCommands");
-        ids.Add(_copyPowerShellItem!, "Tray.Terminal.PowerShell");
-        ids.Add(_copyCmdItem!, "Tray.Terminal.Cmd");
-        ids.Add(_copyBashItem!, "Tray.Terminal.Bash");
-        ids.Add(_outboundItem!, "Tray.OutboundMode");
-        ids.Add(_outboundRuleItem!, "Tray.RuleMode");
-        ids.Add(_outboundGlobalItem!, "Tray.GlobalMode");
-        ids.Add(_outboundDirectItem!, "Tray.DirectMode");
-        ids.Add(_systemProxyItem!, "Tray.SystemProxy");
-        ids.Add(_tunItem!, "Tray.Tun");
-        ids.Add(_restartCoreItem!, "Tray.RestartCore");
-        ids.Add(_exitItem!, "Tray.Exit");
-        return ids;
-    }
-
-    public async Task<object> GetProxyMenuAsync(CancellationToken cancellationToken)
-    {
-        await proxyCatalog.RefreshAsync(cancellationToken, force: true).ConfigureAwait(false);
-        var snapshot = proxyCatalog.GetSnapshot();
-        return await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            _proxyMenu!.Update(snapshot);
-            var items = _trayIcon!.Menu!.Items;
-            return _proxyMenu.Inspect(items.IndexOf(_proxyMenu.Item) == items.IndexOf(_showItem!) + 1);
-        });
-    }
-
-    public async Task SelectProxyAsync(string groupName, string nodeName, CancellationToken cancellationToken)
-    {
-        await GetProxyMenuAsync(cancellationToken).ConfigureAwait(false);
-        await Dispatcher.UIThread.InvokeAsync(() => _proxyMenu!.SelectAsync(groupName, nodeName));
-    }
-
     public Task<bool> SimulateActivationAsync(
         GlobalHotkeyAction action,
         CancellationToken cancellationToken) =>
@@ -590,22 +532,6 @@ internal sealed class TrayMenuService(
         catch (Exception exception)
         {
             AppLogger.Warning($"Tray state refresh failed: {exception.Message}");
-        }
-
-        // 节点列表单独刷新，查询失败不能跳过系统代理和图标状态。
-        try
-        {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await proxyCatalog.RefreshAsync(timeout.Token).ConfigureAwait(false);
-            var proxies = proxyCatalog.GetSnapshot();
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (!_isDisposed) _proxyMenu?.Update(proxies);
-            });
-        }
-        catch (Exception exception)
-        {
-            AppLogger.Warning($"Tray proxy menu refresh failed: {exception.Message}");
         }
     }
 

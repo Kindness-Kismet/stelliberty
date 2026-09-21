@@ -40,9 +40,6 @@ internal interface ITrayCoreRuntime
 
     Task RestartAsync(CancellationToken cancellationToken);
 
-    Task SelectProxyAsync(string? subscriptionId, Stelliberty.Domain.Proxies.ProxyChangeRequest request,
-        CancellationToken cancellationToken);
-
     Task<CoreApplyConfigResult> ApplyCurrentSettingsAsync(CancellationToken cancellationToken);
 
     Task<ServiceModeStatus> GetServiceModeStatusAsync(CancellationToken cancellationToken);
@@ -182,31 +179,6 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
         finally
         {
             ConfigurationChanged?.Invoke(this, EventArgs.Empty);
-            _operationGate.Release();
-        }
-    }
-
-    public async Task SelectProxyAsync(string? subscriptionId, Stelliberty.Domain.Proxies.ProxyChangeRequest request,
-        CancellationToken cancellationToken)
-    {
-        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var selection = new FileSubscriptionSelectionStore(TrayApplicationLayout.AppDataDirectory);
-            if (CurrentStatus.Snapshot.State != CoreState.Running || selection.GetCurrentSubscriptionId() != subscriptionId)
-            {
-                throw new InvalidOperationException("Proxy configuration changed before selection.");
-            }
-            var config = await new MihomoApiProxyConfigProvider(_selectionClient).LoadAsync(cancellationToken).ConfigureAwait(false);
-            var service = new ProxySelectionService(_selectionClient,
-                new FileProxySelectionStore(TrayApplicationLayout.AppDataDirectory), selection);
-            if (await service.SelectNodeAsync(config, request.GroupName, request.ProxyName, true, cancellationToken).ConfigureAwait(false) is null)
-            {
-                throw new InvalidOperationException("Core rejected the proxy selection.");
-            }
-        }
-        finally
-        {
             _operationGate.Release();
         }
     }
