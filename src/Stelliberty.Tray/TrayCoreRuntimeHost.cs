@@ -520,24 +520,26 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
         var settingsStore = new JsonAppSettingsStore(directories);
         var selectionStore = new FileSubscriptionSelectionStore(directories.AppDataDirectory);
         var subscriptionStore = new FileSubscriptionStore(directories.AppDataDirectory);
-        var overrideStore = new FileOverrideStore(directories.AppDataDirectory);
+        var overrideProfileStore = new FileOverrideStore(directories.AppDataDirectory);
         var ruleOverrideService = new RuleOverrideService(
             subscriptionStore,
             selectionStore,
             new FileRuleOverrideStore(directories.AppDataDirectory),
-            new RuleParser());
+            new RuleParser(),
+            overrideEngine: new HubOverrideEngine(),
+            profileOverrideStore: overrideProfileStore);
         var runtimeStore = new FileRuntimeConfigStore(directories.RuntimeDirectory);
         var builder = new StartupBootstrapConfigBuilder(
             settingsStore,
             selectionStore,
             new SelectedRuntimeFallbackGenerator(
                 subscriptionStore,
-                new SubscriptionOverrideSelectionUpdater(subscriptionStore),
+                new SubscriptionOverrideSelectionUpdater(subscriptionStore, overrideProfileStore),
                 new SelectedSubscriptionRuntimeGenerator(
                     subscriptionStore,
                     selectionStore,
                     new RuntimeConfigGenerator(new HubOverrideEngine()),
-                    overrideStore,
+                    overrideProfileStore,
                     runtimeStore,
                     ruleOverrideService: ruleOverrideService)),
             new SubscriptionFailureRecorder(subscriptionStore));

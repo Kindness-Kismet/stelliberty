@@ -1,5 +1,7 @@
 using System.Text;
 using Stelliberty.Application.Diagnostics;
+using Stelliberty.Application.Overrides;
+using Stelliberty.Application.Runtime;
 using Stelliberty.Application.Subscriptions;
 using Stelliberty.Domain.Rules;
 using YamlDotNet.RepresentationModel;
@@ -52,8 +54,12 @@ public sealed class RuleOverrideService(
     ISubscriptionStore subscriptionStore,
     ISubscriptionSelectionStore selectionStore,
     IRuleOverrideStore overrideStore,
-    RuleParser parser)
+    RuleParser parser,
+    IConfigOverrideEngine? overrideEngine = null,
+    IOverrideStore? profileOverrideStore = null)
 {
+    private readonly SubscriptionOverrideResolver _overrideResolver = new(profileOverrideStore);
+
     public RuleEditorSnapshot LoadCurrent()
     {
         var subscriptionId = selectionStore.GetCurrentSubscriptionId();
@@ -68,7 +74,8 @@ public sealed class RuleOverrideService(
             return new RuleEditorSnapshot(subscriptionId, [], [], false);
         }
 
-        var content = subscriptionStore.ReadContent(subscriptionId);
+        // 展示层贴近最终配置：先应用订阅已选覆写再解析，失败回退订阅原文（仿链式代理上下文加载）。
+        var content = ReadDisplayContent(subscription);
         var parsedRules = parser.Parse(content)
             .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
             .ToList();
@@ -163,6 +170,32 @@ public sealed class RuleOverrideService(
         using var writer = new StringWriter(new StringBuilder(), System.Globalization.CultureInfo.InvariantCulture);
         stream.Save(writer, assignAnchors: false);
         return writer.ToString();
+    }
+
+    // 展示与校验共用「订阅 + 已选覆写」的合并内容；覆写不可用时回退订阅原文。
+    private string ReadDisplayContent(Domain.Subscriptions.Subscription subscription)
+    {
+        var originalContent = subscriptionStore.ReadContent(subscription.Id);
+        if (overrideEngine is null || subscription.OverrideIds.Count == 0)
+        {
+            return originalContent;
+        }
+
+        try
+        {
+            var current = originalContent;
+            foreach (var runtimeOverride in _overrideResolver.Resolve(subscription))
+            {
+                current = overrideEngine.Apply(current, runtimeOverride);
+            }
+
+            return current;
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"Rule page override display fell back to subscription content: {exception.Message}");
+            return originalContent;
+        }
     }
 
     // 编辑器候选只含内置动作与订阅代理组。
@@ -367,12 +400,11 @@ public sealed class RuleOverrideService(
             throw new RuleOverrideException(RuleOverrideError.SubscriptionNotFound);
         }
 
-        var builtinKeys = parser.Parse(subscriptionStore.ReadContent(subscriptionId))
-            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
+        var enabledBuiltinKeys = ParseEffectiveBuiltinRules(ReadDisplayContent(subscription))
             .Where(rule => !disabledBuiltinRuleKeys.Contains(RuleKey.Create(rule.Type, rule.Payload, rule.Proxy, rule.Options)))
             .Select(rule => RuleKey.CreateMatch(rule.Type, rule.Payload, rule.Options))
             .ToHashSet(StringComparer.Ordinal);
-        var duplicateBuiltin = customRules.FirstOrDefault(rule => builtinKeys.Contains(rule.MatchKey));
+        var duplicateBuiltin = customRules.FirstOrDefault(rule => enabledBuiltinKeys.Contains(rule.MatchKey));
         if (duplicateBuiltin is not null)
         {
             throw new RuleOverrideException(RuleOverrideError.DuplicateBuiltinRule);
@@ -383,6 +415,12 @@ public sealed class RuleOverrideService(
             throw new RuleOverrideException(RuleOverrideError.InvalidRule);
         }
     }
+
+    // 校验与 LoadCurrent 同源：过滤 rule-providers 后取生效的订阅/覆写规则。
+    private IReadOnlyList<RuleItem> ParseEffectiveBuiltinRules(string content)
+        => parser.Parse(content)
+            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
+            .ToList();
 
     private static string ParseKey(string rule)
     {

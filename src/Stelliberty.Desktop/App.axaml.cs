@@ -104,13 +104,16 @@ public sealed partial class App : Avalonia.Application
             var subscriptionStore = new FileSubscriptionStore(platformDirectories.AppDataDirectory);
             var subscriptionSelectionStore = new FileSubscriptionSelectionStore(platformDirectories.AppDataDirectory);
             var ruleOverrideStore = new FileRuleOverrideStore(platformDirectories.AppDataDirectory);
+            var overrideProfileStore = new FileOverrideStore(platformDirectories.AppDataDirectory);
             var ruleOverrideService = new RuleOverrideService(
                 subscriptionStore,
                 subscriptionSelectionStore,
                 ruleOverrideStore,
-                new RuleParser());
+                new RuleParser(),
+                overrideEngine: new HubOverrideEngine(),
+                profileOverrideStore: overrideProfileStore);
             var proxySelectionStore = new FileProxySelectionStore(platformDirectories.AppDataDirectory);
-            var overrideStore = new FileOverrideStore(platformDirectories.AppDataDirectory);
+            var overrideStore = overrideProfileStore;
 #if DEBUG
             IRemoteOverrideDownloader remoteOverrideDownloader = new RemoteOverrideDownloader();
 #else
