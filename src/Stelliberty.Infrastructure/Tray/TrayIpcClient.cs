@@ -129,15 +129,6 @@ public sealed class TrayIpcClient : IDisposable, IAsyncDisposable
     public Task<JsonElement> SimulatePowerEventAsync(SystemPowerEventKind kind, CancellationToken cancellationToken) =>
         RequestAsync<JsonElement>(TrayProtocol.PowerDebugMethod, new TrayPowerDebugRequest(kind), cancellationToken);
 
-    public Task<JsonElement> ExecuteMenuDebugAsync(TrayMenuDebugRequest request, CancellationToken cancellationToken) =>
-        RequestAsync<JsonElement>(TrayProtocol.MenuDebugMethod, request, cancellationToken);
-
-    public Task<JsonElement> GetProxyMenuAsync(CancellationToken cancellationToken) =>
-        RequestAsync<JsonElement>(TrayProtocol.ProxyMenuMethod, new { }, cancellationToken);
-
-    public Task SelectProxyAsync(Stelliberty.Domain.Proxies.ProxyChangeRequest request, CancellationToken cancellationToken) =>
-        RequestAsync<JsonElement>(TrayProtocol.ProxySelectMethod, request, cancellationToken);
-
     public Task CopyTerminalProxyAsync(CancellationToken cancellationToken) =>
         RequestAsync<JsonElement>(TrayProtocol.CopyTerminalProxyMethod, new { }, cancellationToken);
 

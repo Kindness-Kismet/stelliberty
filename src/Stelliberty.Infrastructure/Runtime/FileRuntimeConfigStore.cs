@@ -8,12 +8,13 @@ public sealed class FileRuntimeConfigStore(string runtimeDirectory) : ISelectedS
 {
     private readonly string _runtimeDirectory = runtimeDirectory;
 
-    public void Save(Subscription subscription, string originalContent, string runtimeConfigContent)
+    public void Save(Subscription subscription, string originalContent, string effectiveConfigContent, string runtimeConfigContent)
     {
         var subscriptionRuntimeDirectory = Path.Combine(_runtimeDirectory, subscription.Id);
         Directory.CreateDirectory(subscriptionRuntimeDirectory);
 
         File.WriteAllText(Path.Combine(subscriptionRuntimeDirectory, "original.yaml"), originalContent);
+        File.WriteAllText(Path.Combine(subscriptionRuntimeDirectory, "effective.yaml"), effectiveConfigContent);
         File.WriteAllText(Path.Combine(subscriptionRuntimeDirectory, "runtime.yaml"), runtimeConfigContent);
         AppLogger.Info($"Runtime config generated: {subscription.Name}");
     }

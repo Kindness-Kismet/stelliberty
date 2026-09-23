@@ -35,9 +35,6 @@ public static class TrayProtocol
 #if DEBUG
     public const string CopyTerminalProxyMethod = "tray.copy_terminal";
     public const string HotkeySimulateMethod = "hotkey.simulate";
-    public const string ProxyMenuMethod = "tray.proxy_menu";
-    public const string ProxySelectMethod = "tray.select_proxy";
-    public const string MenuDebugMethod = "tray.debug_menu";
     public const string PowerDebugMethod = "tray.debug_power";
 #endif
     public const string UiActivateMethod = "ui.activate";
@@ -57,7 +54,6 @@ public sealed record TrayHelloRequest(
     int ProcessId);
 
 #if DEBUG
-public sealed record TrayMenuDebugRequest(string Action, string? AutomationId = null);
 public sealed record TrayPowerDebugRequest(SystemPowerEventKind Event);
 #endif
 

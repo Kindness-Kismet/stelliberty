@@ -30,7 +30,8 @@ public sealed record RuleEditorSnapshot(
     IReadOnlyList<RuleTemplate> Templates,
     bool HasSubscription,
     IReadOnlyList<string>? ProxyOptions = null,
-    bool HasCustomOrder = false)
+    bool HasCustomOrder = false,
+    bool IsBaselineReady = true)
 {
     public IReadOnlyList<string> ProxyOptions { get; init; } = ProxyOptions ?? [];
 }
@@ -41,6 +42,7 @@ public enum RuleOverrideError
     DuplicateCustomRule,
     DuplicateBuiltinRule,
     SubscriptionNotFound,
+    BaselineNotReady,
 }
 
 public sealed class RuleOverrideException(RuleOverrideError error) : InvalidOperationException(error.ToString())
@@ -52,7 +54,8 @@ public sealed class RuleOverrideService(
     ISubscriptionStore subscriptionStore,
     ISubscriptionSelectionStore selectionStore,
     IRuleOverrideStore overrideStore,
-    RuleParser parser)
+    RuleParser parser,
+    IRuleBaselineConfigSource baselineSource)
 {
     public RuleEditorSnapshot LoadCurrent()
     {
@@ -68,10 +71,14 @@ public sealed class RuleOverrideService(
             return new RuleEditorSnapshot(subscriptionId, [], [], false);
         }
 
-        var content = subscriptionStore.ReadContent(subscriptionId);
-        var parsedRules = parser.Parse(content)
-            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
-            .ToList();
+        // 基线缺失时改动会以订阅原文为准，顺序与查重都会污染核心配置，因此整页转只读。
+        var content = baselineSource.ReadBaseline(subscriptionId);
+        if (content is null)
+        {
+            return new RuleEditorSnapshot(subscriptionId, [], [], true, IsBaselineReady: false);
+        }
+
+        var parsedRules = ParseBuiltinRules(content);
         var matchCounts = parsedRules
             .GroupBy(rule => RuleKey.CreateMatch(rule.Type, rule.Payload, rule.Options), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
@@ -164,6 +171,12 @@ public sealed class RuleOverrideService(
         stream.Save(writer, assignAnchors: false);
         return writer.ToString();
     }
+
+    // 规则页只关心可编辑规则，rule-providers 由核心自行加载。
+    private List<RuleItem> ParseBuiltinRules(string content)
+        => parser.Parse(content)
+            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
+            .ToList();
 
     // 编辑器候选只含内置动作与订阅代理组。
     private static IReadOnlyList<string> BuildProxyOptions(string configContent)
@@ -367,8 +380,10 @@ public sealed class RuleOverrideService(
             throw new RuleOverrideException(RuleOverrideError.SubscriptionNotFound);
         }
 
-        var builtinKeys = parser.Parse(subscriptionStore.ReadContent(subscriptionId))
-            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
+        // 基线缺失时无法判定内置规则集合，保存会污染顺序与查重，直接拒绝。
+        var content = baselineSource.ReadBaseline(subscriptionId)
+            ?? throw new RuleOverrideException(RuleOverrideError.BaselineNotReady);
+        var builtinKeys = ParseBuiltinRules(content)
             .Where(rule => !disabledBuiltinRuleKeys.Contains(RuleKey.Create(rule.Type, rule.Payload, rule.Proxy, rule.Options)))
             .Select(rule => RuleKey.CreateMatch(rule.Type, rule.Payload, rule.Options))
             .ToHashSet(StringComparer.Ordinal);

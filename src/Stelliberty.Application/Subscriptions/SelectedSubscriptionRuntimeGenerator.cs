@@ -32,13 +32,19 @@ public sealed class SelectedSubscriptionRuntimeGenerator(
             ?? throw new InvalidOperationException($"Selected subscription not found: {subscriptionId}");
         var originalContent = ReadOriginalContent(subscription);
 
+        // 基线由 PostOverrideTransform 回填；初值仅为满足确定赋值，transform 必定执行一次。
+        var effectiveContent = originalContent;
         var runtimeConfig = runtimeConfigGenerator.Generate(new RuntimeConfigGenerationRequest(
             BaseConfigContent: originalContent,
             Overrides: _overrideResolver.Resolve(subscription).Concat(request.Overrides).ToList(),
             RuntimeParams: request.RuntimeParams,
             // 自定义规则最后定稿，避免订阅覆写改写用户编辑结果。
-            PostOverrideTransform: content => ApplyRuntimeRuleOverrides(subscription.Id, content)));
-        runtimeStore?.Save(subscription, originalContent, runtimeConfig.RuntimeConfigContent);
+            PostOverrideTransform: content =>
+            {
+                effectiveContent = DisableBrokenChainProxiesAndApply(subscription.Id, content);
+                return ApplyRuntimeRuleOverrides(subscription.Id, effectiveContent);
+            }));
+        runtimeStore?.Save(subscription, originalContent, effectiveContent, runtimeConfig.RuntimeConfigContent);
 
         return new SelectedSubscriptionRuntimeResult(
             subscription,
@@ -61,12 +67,17 @@ public sealed class SelectedSubscriptionRuntimeGenerator(
         }
     }
 
-    private string ApplyRuntimeRuleOverrides(string subscriptionId, string content)
+    // 会把失效链式回写为禁用，再产出规则页基线。
+    private string DisableBrokenChainProxiesAndApply(string subscriptionId, string content)
     {
         var subscription = DisableBrokenChainProxies(subscriptionId, content);
-        var withChainProxies = _chainProxyApplier.Apply(content, subscription);
-        _ruleOverrideService?.DisableCustomRulesWithMissingOutbound(subscriptionId, withChainProxies);
-        return _ruleOverrideService?.Apply(subscriptionId, withChainProxies) ?? withChainProxies;
+        return _chainProxyApplier.Apply(content, subscription);
+    }
+
+    private string ApplyRuntimeRuleOverrides(string subscriptionId, string effectiveContent)
+    {
+        _ruleOverrideService?.DisableCustomRulesWithMissingOutbound(subscriptionId, effectiveContent);
+        return _ruleOverrideService?.Apply(subscriptionId, effectiveContent) ?? effectiveContent;
     }
 
     // 失效链式先保存为禁用，再按禁用后的订阅生成配置。
