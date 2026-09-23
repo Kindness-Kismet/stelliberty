@@ -497,7 +497,8 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
             subscriptionStore,
             selectionStore,
             new FileRuleOverrideStore(directories.AppDataDirectory),
-            new RuleParser());
+            new RuleParser(),
+            new FileRuleBaselineConfigSource(directories.RuntimeDirectory));
         var runtimeStore = new FileRuntimeConfigStore(directories.RuntimeDirectory);
         var builder = new StartupBootstrapConfigBuilder(
             settingsStore,

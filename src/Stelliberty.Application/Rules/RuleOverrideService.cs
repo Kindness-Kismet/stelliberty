@@ -52,7 +52,8 @@ public sealed class RuleOverrideService(
     ISubscriptionStore subscriptionStore,
     ISubscriptionSelectionStore selectionStore,
     IRuleOverrideStore overrideStore,
-    RuleParser parser)
+    RuleParser parser,
+    IRuleBaselineConfigSource baselineSource)
 {
     public RuleEditorSnapshot LoadCurrent()
     {
@@ -68,10 +69,8 @@ public sealed class RuleOverrideService(
             return new RuleEditorSnapshot(subscriptionId, [], [], false);
         }
 
-        var content = subscriptionStore.ReadContent(subscriptionId);
-        var parsedRules = parser.Parse(content)
-            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
-            .ToList();
+        var content = ReadBaselineContent(subscriptionId);
+        var parsedRules = ParseBuiltinRules(content);
         var matchCounts = parsedRules
             .GroupBy(rule => RuleKey.CreateMatch(rule.Type, rule.Payload, rule.Options), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
@@ -164,6 +163,16 @@ public sealed class RuleOverrideService(
         stream.Save(writer, assignAnchors: false);
         return writer.ToString();
     }
+
+    // 展示与查重共用运行时基线；基线尚未生成时退回订阅原文。
+    private string ReadBaselineContent(string subscriptionId)
+        => baselineSource.ReadBaseline(subscriptionId) ?? subscriptionStore.ReadContent(subscriptionId);
+
+    // 规则页只关心可编辑规则，rule-providers 由核心自行加载。
+    private List<RuleItem> ParseBuiltinRules(string content)
+        => parser.Parse(content)
+            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
+            .ToList();
 
     // 编辑器候选只含内置动作与订阅代理组。
     private static IReadOnlyList<string> BuildProxyOptions(string configContent)
@@ -367,8 +376,7 @@ public sealed class RuleOverrideService(
             throw new RuleOverrideException(RuleOverrideError.SubscriptionNotFound);
         }
 
-        var builtinKeys = parser.Parse(subscriptionStore.ReadContent(subscriptionId))
-            .Where(rule => !string.Equals(rule.Source, "rule-providers", StringComparison.Ordinal))
+        var builtinKeys = ParseBuiltinRules(ReadBaselineContent(subscriptionId))
             .Where(rule => !disabledBuiltinRuleKeys.Contains(RuleKey.Create(rule.Type, rule.Payload, rule.Proxy, rule.Options)))
             .Select(rule => RuleKey.CreateMatch(rule.Type, rule.Payload, rule.Options))
             .ToHashSet(StringComparer.Ordinal);

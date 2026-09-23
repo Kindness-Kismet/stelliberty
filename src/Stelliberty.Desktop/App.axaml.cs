@@ -108,7 +108,8 @@ public sealed partial class App : Avalonia.Application
                 subscriptionStore,
                 subscriptionSelectionStore,
                 ruleOverrideStore,
-                new RuleParser());
+                new RuleParser(),
+                new FileRuleBaselineConfigSource(platformDirectories.RuntimeDirectory));
             var proxySelectionStore = new FileProxySelectionStore(platformDirectories.AppDataDirectory);
             var overrideStore = new FileOverrideStore(platformDirectories.AppDataDirectory);
 #if DEBUG
