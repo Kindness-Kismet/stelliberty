@@ -128,6 +128,9 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
         }
     }
     public bool HasSubscription => _snapshot.HasSubscription;
+    // 基线未生成时编辑会污染顺序与查重，整页只读直到运行时生成完成。
+    public bool IsBaselineReady => _snapshot.IsBaselineReady;
+    public bool CanEditRules => HasSubscription && IsBaselineReady;
     public bool IsCoreRunning => _isCoreRunning;
     public bool HasRequestedRefresh => _hasRequestedRefresh;
     public PageLoadingState Loading { get; } = new();
@@ -142,8 +145,8 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
     public string TemplateDialogTitle => Localize(IsTemplateSelectMode ? "Rules.Dialog.Template.SelectTitle" : "Rules.Dialog.Template.CreateTitle");
     public bool IsVisibleRulesEmpty => VisibleRules.Count == 0;
     public bool HasSelectedTemplate => SelectedTemplate is not null;
-    public bool CanSaveTemplate => HasCustomRules;
-    public bool CanResetRuleOrder => HasSubscription && _snapshot.HasCustomOrder;
+    public bool CanSaveTemplate => HasCustomRules && IsBaselineReady;
+    public bool CanResetRuleOrder => CanEditRules && _snapshot.HasCustomOrder;
     public string EmptyText => Localize(EmptyTextKey);
     public string MonitorStateText => _isCoreRunning ? Localize("Rules.State.Monitoring") : Localize("Rules.State.CoreStopped");
     public string MonitorSignalTag => _isCoreRunning ? "ok" : "warning";
@@ -160,6 +163,7 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
             }
 
             if (!HasSubscription) return "Rules.Empty.NoSubscription";
+            if (!IsBaselineReady) return "Rules.Empty.BaselineNotReady";
             return BuiltinRules.Count + CustomRules.Count == 0 ? "Rules.Empty.NoRules" : "Rules.Empty.NoMatches";
         }
     }
@@ -334,6 +338,8 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(Templates));
         RebuildOutboundTargets();
         OnPropertyChanged(nameof(HasSubscription));
+        OnPropertyChanged(nameof(IsBaselineReady));
+        OnPropertyChanged(nameof(CanEditRules));
         OnPropertyChanged(nameof(IsEmptyVisible));
         OnPropertyChanged(nameof(EmptyText));
         OnPropertyChanged(nameof(IsCustomRulesEmpty));
@@ -382,6 +388,7 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
 
     private void OpenEditor(RuleEditorRowViewModel? row)
     {
+        if (!CanEditRules) return;
         _editingRule = row;
         SelectedRuleType = row is null ? RuleTypeOptions[1] : FindRuleType(row.Type, row.Options);
         Payload = row?.Item.Payload ?? string.Empty;
@@ -454,7 +461,8 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
 
     private void SaveCurrentRules(IReadOnlyList<EditableRule> customRules, IReadOnlyList<string>? ruleOrder = null)
     {
-        if (_overrideService is null || string.IsNullOrWhiteSpace(_snapshot.SubscriptionId)) return;
+        // 基线未就绪时任何保存都会按订阅原文重写顺序与查重，统一在此拦住。
+        if (_overrideService is null || string.IsNullOrWhiteSpace(_snapshot.SubscriptionId) || !IsBaselineReady) return;
         _overrideService.Save(
             _snapshot.SubscriptionId,
             customRules,
@@ -720,6 +728,7 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
         RuleOverrideError.DuplicateCustomRule => "Rules.Error.DuplicateCustom",
         RuleOverrideError.DuplicateBuiltinRule => "Rules.Error.DuplicateBuiltin",
         RuleOverrideError.SubscriptionNotFound => "Rules.Error.SubscriptionNotFound",
+        RuleOverrideError.BaselineNotReady => "Rules.Error.BaselineNotReady",
         _ => "Rules.Error.InvalidRule",
     });
     private void OnRuleStateChanged(object? sender, EventArgs args) => SaveChanges();

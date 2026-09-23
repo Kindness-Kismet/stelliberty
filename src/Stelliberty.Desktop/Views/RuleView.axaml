@@ -30,6 +30,7 @@
             <Button Classes="soft-action primary"
                     AutomationProperties.AutomationId="Rules.AddButton"
                     Command="{Binding AddRuleCommand}"
+                    IsEnabled="{Binding CanEditRules}"
                     ToolTip.Tip="{loc:Loc Rules.Action.Add}">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <iconPacks:PackIconMingCuteIcons Classes="icon" Width="14" Height="14" Kind="AddLine" />
@@ -89,11 +90,13 @@
 
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
             <Button Classes="toolbar-icon" AutomationProperties.AutomationId="Rules.CreateTemplateButton"
-                    Command="{Binding OpenCreateTemplateCommand}" ToolTip.Tip="{loc:Loc Rules.Action.CreateTemplate}">
+                    Command="{Binding OpenCreateTemplateCommand}" IsEnabled="{Binding CanEditRules}"
+                    ToolTip.Tip="{loc:Loc Rules.Action.CreateTemplate}">
               <iconPacks:PackIconMingCuteIcons Classes="icon" Width="15" Height="15" Kind="FileNewLine" />
             </Button>
             <Button Classes="toolbar-icon" AutomationProperties.AutomationId="Rules.SelectTemplateButton"
-                    Command="{Binding OpenTemplateCommand}" ToolTip.Tip="{loc:Loc Rules.Action.SelectTemplate}">
+                    Command="{Binding OpenTemplateCommand}" IsEnabled="{Binding CanEditRules}"
+                    ToolTip.Tip="{loc:Loc Rules.Action.SelectTemplate}">
               <iconPacks:PackIconMingCuteIcons Classes="icon" Width="15" Height="15" Kind="FolderOpenLine" />
             </Button>
             <Button Classes="toolbar-icon" AutomationProperties.AutomationId="Rules.ResetOrderButton"
