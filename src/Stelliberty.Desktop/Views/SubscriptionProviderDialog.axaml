@@ -17,15 +17,17 @@
               <iconPacks:PackIconMingCuteIcons Width="18" Height="18" Kind="{Binding VehicleIconType}" />
             </Border>
             <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <!-- 名称限宽，为同行类型标签和操作按钮留出空间。 -->
+              <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock AutomationProperties.AutomationId="{Binding NameAutomationId}"
                            Classes="settings-row-title" Text="{Binding Name}"
                            ToolTip.Tip="{Binding Name}" TextTrimming="CharacterEllipsis"
+                           MaxWidth="240"
                            VerticalAlignment="Center" />
-                <Border Grid.Column="1" Classes="list-pill" Tag="{Binding VehiclePillTag}" VerticalAlignment="Center">
+                <Border Classes="list-pill" Tag="{Binding VehiclePillTag}" VerticalAlignment="Center">
                   <TextBlock Text="{Binding VehicleText}" />
                 </Border>
-              </Grid>
+              </StackPanel>
               <TextBlock AutomationProperties.AutomationId="{Binding StatAutomationId}"
                          Classes="settings-row-subtitle" Text="{Binding StatText}"
                          TextTrimming="CharacterEllipsis" />
@@ -35,10 +37,10 @@
               <Button Classes="dialog-secondary" Padding="12,7"
                       AutomationProperties.AutomationId="{Binding UploadAutomationId}"
                       Click="OnProviderUploadClicked" CommandParameter="{Binding Name}"
-                      IsVisible="{Binding CanUpload}" Content="{loc:Loc Common.Upload}" />
+                      IsVisible="{Binding IsFile}" IsEnabled="{Binding CanUpload}" Content="{loc:Loc Common.Upload}" />
               <Button Classes="dialog-secondary" Padding="12,7"
                       AutomationProperties.AutomationId="{Binding SyncAutomationId}"
-                      IsVisible="{Binding CanSync}" IsEnabled="{Binding !IsSyncing}"
+                      IsVisible="{Binding IsRemote}" IsEnabled="{Binding IsSyncEnabled}"
                       Command="{Binding ((vm:SubscriptionProviderViewModel)DataContext).SyncProviderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                       CommandParameter="{Binding Name}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -75,7 +77,7 @@
       </Border>
     </DataTemplate>
   </UserControl.Resources>
-  <!-- 弹层由窗口承载，首页和订阅页共用同一会话。 -->
+  <!-- 弹层由窗口承载，避免受到订阅列表的裁剪。 -->
   <controls:OverlayDialogHost AutomationProperties.AutomationId="Subscriptions.ProviderDialogOverlay"
                               IsOpen="{Binding IsProviderSelectorDialogVisible}">
     <controls:OverlayDialogHost.DialogContent>

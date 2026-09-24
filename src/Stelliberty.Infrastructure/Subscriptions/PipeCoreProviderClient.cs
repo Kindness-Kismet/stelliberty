@@ -47,10 +47,7 @@ public sealed class PipeCoreProviderClient : ISubscriptionProviderSyncer, ISubsc
     private async Task<IReadOnlyList<SubscriptionProviderRuntimeState>> ReadSectionAsync(string providerType, CancellationToken cancellationToken)
     {
         using var response = await _client.GetAsync(providerType == "rule" ? "providers/rules" : "providers/proxies", cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            return [];
-        }
+        response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
         using var document = JsonDocument.Parse(json);
@@ -76,12 +73,11 @@ public sealed class PipeCoreProviderClient : ISubscriptionProviderSyncer, ISubsc
             return null;
         }
 
-        var expire = ReadTrafficValue(info, "Expire");
-        return new SubscriptionTrafficInfo(
+        return SubscriptionTrafficInfo.FromValues(
             ReadTrafficValue(info, "Upload"),
             ReadTrafficValue(info, "Download"),
             ReadTrafficValue(info, "Total"),
-            expire <= DateTimeOffset.MaxValue.ToUnixTimeSeconds() ? expire : 0);
+            ReadTrafficValue(info, "Expire"));
     }
 
     private static long ReadTrafficValue(JsonElement info, string name)

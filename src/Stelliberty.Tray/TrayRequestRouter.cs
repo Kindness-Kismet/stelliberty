@@ -84,6 +84,10 @@ internal sealed class TrayRequestRouter : IDisposable
                 TrayProtocol.HelloMethod => HandleHello(connection, request),
                 TrayProtocol.HealthMethod => await HandleHealthAsync(cancellationToken).ConfigureAwait(false),
                 TrayProtocol.BackgroundStatusMethod => TrayIpcResult.Success(_backgroundTasks.Status),
+                TrayProtocol.SubscriptionProvidersMethod => TrayIpcResult.Success(
+                    await _coreRuntime.ReadProvidersAsync(request.DeserializeParameters<TraySubscriptionProvidersRequest>().SubscriptionId,
+                        cancellationToken).ConfigureAwait(false)),
+                TrayProtocol.SubscriptionProviderSyncMethod => await HandleProviderSyncAsync(request, cancellationToken).ConfigureAwait(false),
                 TrayProtocol.CoreEnsureStartedMethod => TrayIpcResult.Success(
                     await _coreRuntime.EnsureStartedAsync(cancellationToken).ConfigureAwait(false)),
                 TrayProtocol.CoreStopMethod => TrayIpcResult.Success(
@@ -144,6 +148,11 @@ internal sealed class TrayRequestRouter : IDisposable
             return TrayIpcResult.Error(exception.Code, exception.Message);
         }
         catch (InvalidOperationException exception) when (
+            request.Method.StartsWith("subscriptions.", StringComparison.Ordinal))
+        {
+            return TrayIpcResult.Error("subscriptions.operation_failed", exception.Message);
+        }
+        catch (InvalidOperationException exception) when (
             request.Method.StartsWith("system_proxy.", StringComparison.Ordinal))
         {
             return TrayIpcResult.Error("system_proxy.operation_failed", exception.Message);
@@ -193,6 +202,13 @@ internal sealed class TrayRequestRouter : IDisposable
         _handshakes[connection.Id] = 0;
         _connections[connection.Id] = connection;
         return TrayIpcResult.Success(CreateHello());
+    }
+
+    private async Task<TrayIpcResult> HandleProviderSyncAsync(TrayIpcRequest request, CancellationToken cancellationToken)
+    {
+        var parameters = request.DeserializeParameters<TraySubscriptionProviderSyncRequest>();
+        await _coreRuntime.SyncProviderAsync(parameters.SubscriptionId, parameters.ProviderType, parameters.ProviderName, cancellationToken).ConfigureAwait(false);
+        return TrayIpcResult.Success(new { });
     }
 
     private async Task<TrayIpcResult> HandleHealthAsync(CancellationToken cancellationToken)

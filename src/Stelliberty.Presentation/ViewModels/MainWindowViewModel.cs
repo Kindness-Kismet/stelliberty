@@ -779,7 +779,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 // pending 只覆盖重启路径，重载成功后立即清除。
                 _pendingRuntimeSubscriptionId = subscriptionId;
                 var applyResult = await ApplyRuntimeConfigToCoreAsync(
-                    new CoreApplyConfigRequest(result.RuntimeConfigContent, subscriptionId),
+                    new CoreApplyConfigRequest(result.RuntimeConfigContent, subscriptionId, result.ContentFingerprint),
                     refreshVersion,
                     endpointChangeVersion);
                 if (applyResult is null)
@@ -806,6 +806,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             await ProxyPage.RefreshProxiesAsync();
             ProxyPage.BindLoadedConfigToSubscription(subscriptionId);
+            await SubscriptionPage.RefreshProviderTrafficAsync();
             if (wasAppliedToCore
                 && ProxyPage.LastRuntimeSnapshot is { } snapshot
                 && ChainProxyCycleDetector.HasCycle(snapshot))

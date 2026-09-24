@@ -102,6 +102,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:SubscriptionItemViewModel">
               <Border Classes="surface-card subscription"
+                      ToolTip.Tip="{Binding TrafficTooltip}"
                       Classes.selected="{Binding IsCurrent}"
                       Classes.pressed="{Binding #SubscriptionCardHit.IsPressed}">
                 <Grid>
@@ -144,7 +145,8 @@
                     </Grid>
 
                     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,2,0,0">
-                      <TextBlock Text="{loc:Loc Home.Subscription.Field.Traffic}" FontSize="12"
+                      <TextBlock Text="{Binding TrafficLabel}" FontSize="12"
+                                 AutomationProperties.AutomationId="{Binding TrafficLabelAutomationId}"
                                  Foreground="{DynamicResource AppTextTertiaryBrush}" VerticalAlignment="Center" />
                       <TextBlock Grid.Column="1" Text="{Binding TrafficText}"
                                  AutomationProperties.AutomationId="{Binding TrafficAutomationId}"
@@ -179,6 +181,7 @@
                                                            Foreground="{DynamicResource AppTextTertiaryBrush}" />
                           <TextBlock Grid.Column="1"
                                      Text="{Binding ExpireText}"
+                                     AutomationProperties.AutomationId="{Binding ExpireAutomationId}"
                                      VerticalAlignment="Center"
                                      Foreground="{DynamicResource AppTextPrimaryBrush}"
                                      FontSize="12.5"

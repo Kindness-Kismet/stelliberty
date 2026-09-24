@@ -36,6 +36,7 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
     private readonly SubscriptionDeleter _subscriptionDeleter;
     private readonly ISubscriptionSelectionStore? _subscriptionSelectionStore;
     private readonly ISelectedSubscriptionRuntimeStore? _runtimeStore;
+    private readonly SelectedSubscriptionProviderCatalogLoader? _providerCatalogLoader;
     private readonly ObservableCollection<SubscriptionItemViewModel> _subscriptions = [];
     private readonly ReadOnlyObservableCollection<SubscriptionItemViewModel> _subscriptionView;
     private readonly UpdateOperationState _updateState = new();
@@ -79,8 +80,10 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         _subscriptionDeleter = subscriptionDeleter;
         _subscriptionSelectionStore = subscriptionSelectionStore;
         _runtimeStore = runtimeStore;
+        _providerCatalogLoader = providerCatalogLoader;
         Provider = new SubscriptionProviderViewModel(providerCatalogLoader, providerUploader, localization);
         Provider.ProvidersSynced += (sender, args) => ProvidersSynced?.Invoke(sender, args);
+        Provider.SnapshotChanged += (_, snapshot) => ApplyProviderSnapshot(snapshot);
         Provider.DialogStateChanged += (_, _) => NotifyDialogOverlayChanged();
         Provider.ToastRequested += (_, toast) => ShowToast(toast.Message, toast.Type);
         ChainProxy = new SubscriptionChainProxyDialogViewModel(localization, chainProxyContextLoader);
@@ -114,7 +117,6 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         CloseQrCodeDialogCommand = new RelayCommand(CloseQrCodeDialog);
         ShowOverrideSelectorCommand = new RelayCommand<string>(ShowOverrideSelector);
         ShowRuntimeConfigDialogCommand = new RelayCommand<string>(ShowRuntimeConfigDialog);
-        ShowCurrentProvidersCommand = new RelayCommand(() => Provider.Show(CurrentSubscriptionId));
         EditFileCommand = new RelayCommand<string>(EditFile);
         ShowChainProxyDialogCommand = new RelayCommand<string>(ShowChainProxyDialog);
         ShowEditDialogCommand = new RelayCommand<string>(ShowEditDialog);
@@ -235,8 +237,6 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
 
     public SubscriptionProviderViewModel Provider { get; }
 
-    public ICommand ShowCurrentProvidersCommand { get; }
-
     public SubscriptionAddDialogViewModel AddDialog { get; }
 
     public ICommand SelectSubscriptionCommand { get; }
@@ -280,6 +280,11 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
 
     public void LoadSubscriptions(IReadOnlyList<Subscription> subscriptions)
     {
+        _providerRefreshVersion++;
+        foreach (var id in _providerSnapshots.Keys.Except(subscriptions.Select(item => item.Id)).ToList())
+        {
+            _providerSnapshots.Remove(id);
+        }
         var currentSubscriptionId = _currentSubscriptionId ?? _subscriptionSelectionStore?.GetCurrentSubscriptionId();
         _subscriptions.Clear();
         foreach (var subscription in subscriptions)
@@ -357,6 +362,7 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         {
             var subscriptions = await Task.Run(() => _subscriptionStore.LoadSubscriptions());
             LoadSubscriptions(subscriptions);
+            await RefreshProviderTrafficAsync();
         }
         catch (Exception exception)
         {
@@ -564,6 +570,8 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
 
     public void Dispose()
     {
+        _providerLifetime.Cancel();
+        _providerLifetime.Dispose();
         _qrCodeCloseReset.Cancel();
         if (_localization is not null)
         {

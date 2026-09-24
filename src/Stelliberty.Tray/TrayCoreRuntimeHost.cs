@@ -45,6 +45,10 @@ internal interface ITrayCoreRuntime
     Task<ServiceModeStatus> GetServiceModeStatusAsync(CancellationToken cancellationToken);
     Task SendHeartbeatAsync(CancellationToken cancellationToken);
 
+    Task<SubscriptionProviderSnapshot> ReadProvidersAsync(string subscriptionId, CancellationToken cancellationToken);
+    Task<long> RefreshProvidersAsync(CancellationToken cancellationToken);
+    Task SyncProviderAsync(string subscriptionId, string providerType, string providerName, CancellationToken cancellationToken);
+
     Task<ServiceModeOperationResult> InstallOrUpdateServiceModeAsync(CancellationToken cancellationToken);
 
     Task<ServiceModeOperationResult> UninstallServiceModeAsync(CancellationToken cancellationToken);
@@ -172,7 +176,11 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
             ThrowIfDisposed();
             var manager = RequireManager();
             ConfigurationChanging?.Invoke(this, EventArgs.Empty);
+            var providerContext = string.IsNullOrWhiteSpace(request.SubscriptionId) ? null
+                : _providerSnapshots.CreateContext(request.SubscriptionId, request.RuntimeYamlContent, request.SubscriptionContentFingerprint);
+            _providerContext = null;
             var result = await _restoringManager!.ApplyConfigAsync(request, cancellationToken).ConfigureAwait(false);
+            _providerContext = providerContext;
             UpdateStatus(await manager.GetSnapshotAsync(cancellationToken).ConfigureAwait(false));
             return result;
         }
@@ -462,7 +470,7 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
             : CoreHostOperationResult.Failure(result.Message);
     }
 
-    private static BootstrapResult StartHub()
+    private BootstrapResult StartHub()
     {
         return HubBootstrap.Start(new BootstrapOptions(
             PipeName: TrayCoreEndpoints.Hub,
@@ -473,15 +481,18 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
             BootstrapYaml: BuildInitialBootstrapYaml(CanUseTun())));
     }
 
-    private static string BuildInitialBootstrapYaml(bool canUseTun)
+    private string BuildInitialBootstrapYaml(bool canUseTun)
     {
         try
         {
-            return BuildBootstrapYaml(canUseTun);
+            var content = BuildBootstrapYaml(canUseTun);
+            SetProviderContext(new FileSubscriptionSelectionStore(TrayApplicationLayout.AppDataDirectory).GetCurrentSubscriptionId(), content);
+            return content;
         }
         catch (Exception exception)
         {
             AppLogger.Warning($"Tray startup config generation failed: {exception.Message}");
+            _providerContext = null;
             return StartupBootstrapConfigBuilder.BuildDefaultEmptyYaml(TrayCoreEndpoints.Core);
         }
     }
@@ -600,6 +611,7 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
 
             await Task.Run(HubBootstrap.Shutdown).ConfigureAwait(false);
             _selectionClient.Dispose();
+            _providerClient.Dispose();
         }
         finally
         {

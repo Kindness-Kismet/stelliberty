@@ -9,7 +9,7 @@ public sealed partial class SubscriptionPageViewModel
 {
     private SubscriptionItemViewModel ToSubscriptionItem(Subscription subscription, bool isCurrent = false)
     {
-        var trafficUsed = subscription.TrafficInfo?.Upload + subscription.TrafficInfo?.Download ?? 0;
+        var trafficUsed = subscription.TrafficInfo?.Used ?? 0;
         return new SubscriptionItemViewModel(
             subscription.Id,
             subscription.Name,
@@ -33,7 +33,8 @@ public sealed partial class SubscriptionPageViewModel
             lastErrorAt: subscription.LastErrorAt,
             sourceFormat: subscription.SourceFormat,
             localization: _localization,
-            hasTrafficInfo: subscription.TrafficInfo is not null);
+            hasTrafficInfo: subscription.TrafficInfo is not null,
+            providerSnapshot: _providerSnapshots.GetValueOrDefault(subscription.Id));
     }
 
     private static SubscriptionOverrideOptionViewModel ToOverrideOption(OverrideProfile overrideProfile)

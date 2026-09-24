@@ -30,9 +30,15 @@ public sealed partial class SubscriptionPageViewModel
         ? CurrentSubscription.TrafficText
         : Localize("Subscriptions.Traffic.Unavailable");
 
+    public string HomeCardTrafficLabel => CurrentSubscription?.TrafficLabel ?? Localize("Home.Subscription.Field.Traffic");
+
+    public string HomeCardTrafficTooltip => CurrentSubscription?.TrafficTooltip ?? string.Empty;
+
+    public string HomeCardExpireTooltip => CurrentSubscription?.ExpireTooltip ?? string.Empty;
+
     public double HomeCardTrafficRatio => CurrentSubscription?.TrafficUsageRatio ?? 0;
 
-    public bool HomeCardHasTrafficInfo => CurrentSubscription?.HasTrafficInfo == true;
+    public bool HomeCardHasTrafficInfo => CurrentSubscription is { HasTrafficInfo: true } or { HasProviderTraffic: true };
 
     public bool HomeCardHasTrafficTotal => CurrentSubscription?.HasTrafficTotal == true;
 
@@ -68,6 +74,9 @@ public sealed partial class SubscriptionPageViewModel
         OnPropertyChanged(nameof(HomeCardUpdatedText));
         OnPropertyChanged(nameof(HomeCardExpireText));
         OnPropertyChanged(nameof(HomeCardTrafficText));
+        OnPropertyChanged(nameof(HomeCardTrafficLabel));
+        OnPropertyChanged(nameof(HomeCardTrafficTooltip));
+        OnPropertyChanged(nameof(HomeCardExpireTooltip));
         OnPropertyChanged(nameof(HomeCardTrafficRatio));
         OnPropertyChanged(nameof(HomeCardHasTrafficInfo));
         OnPropertyChanged(nameof(HomeCardHasTrafficTotal));

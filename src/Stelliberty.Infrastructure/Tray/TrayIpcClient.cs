@@ -2,6 +2,7 @@ using Stelliberty.Application.Proxies;
 using System.Text.Json;
 using Stelliberty.Application.Platform;
 using Stelliberty.Application.Runtime;
+using Stelliberty.Application.Subscriptions;
 using Stelliberty.Infrastructure.Core;
 
 namespace Stelliberty.Infrastructure.Tray;
@@ -51,6 +52,13 @@ public sealed class TrayIpcClient : IDisposable, IAsyncDisposable
 
     public Task<BackgroundTaskStatus> GetBackgroundStatusAsync(CancellationToken cancellationToken) =>
         RequestAsync<BackgroundTaskStatus>(TrayProtocol.BackgroundStatusMethod, new { }, cancellationToken);
+
+    public Task<SubscriptionProviderSnapshot> GetSubscriptionProvidersAsync(string subscriptionId, CancellationToken cancellationToken) =>
+        RequestAsync<SubscriptionProviderSnapshot>(TrayProtocol.SubscriptionProvidersMethod, new TraySubscriptionProvidersRequest(subscriptionId), cancellationToken);
+
+    public Task SyncSubscriptionProviderAsync(string subscriptionId, string providerType, string providerName, CancellationToken cancellationToken) =>
+        RequestAsync<JsonElement>(TrayProtocol.SubscriptionProviderSyncMethod,
+            new TraySubscriptionProviderSyncRequest(subscriptionId, providerType, providerName), cancellationToken);
 
     public Task<string> CaptureProxyDelayScopeAsync(CancellationToken cancellationToken) =>
         RequestAsync<string>(TrayProtocol.ProxyDelayScopeMethod, new { }, cancellationToken);

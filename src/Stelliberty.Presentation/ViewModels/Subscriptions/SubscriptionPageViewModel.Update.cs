@@ -233,6 +233,10 @@ public sealed partial class SubscriptionPageViewModel
             _updateState.CompleteItemUpdate(subscriptionId, isUpdated: true);
         }
 
+        foreach (var subscriptionId in result.UpdatedSubscriptionIds)
+        {
+            _providerSnapshots.Remove(subscriptionId);
+        }
         RefreshPersistedSubscriptionRows(result.UpdatedSubscriptionIds.Concat(result.SkippedSubscriptionIds));
         if (completesBatch)
         {
@@ -241,6 +245,7 @@ public sealed partial class SubscriptionPageViewModel
 
         RaiseSubscriptionStateChanged();
         SubscriptionsUpdated?.Invoke(this, result);
+        _ = RefreshProviderTrafficAsync();
     }
 
     private IReadOnlyList<string> GetPendingSubscriptionUpdateIds()

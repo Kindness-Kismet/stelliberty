@@ -8,12 +8,14 @@ namespace Stelliberty.Infrastructure.Tray;
 
 public static class TrayProtocol
 {
-    public const int Version = 9;
+    public const int Version = 10;
 
     public const string HelloMethod = "tray.hello";
     public const string HealthMethod = "tray.get_health";
     public const string BackgroundStatusMethod = "background.get_status";
     public const string BackgroundChangedEvent = "background.changed";
+    public const string SubscriptionProvidersMethod = "subscriptions.get_providers";
+    public const string SubscriptionProviderSyncMethod = "subscriptions.sync_provider";
     public const string ProxyDelayScopeMethod = "proxies.delay_scope";
     public const string ProxyDelayPublishMethod = "proxies.publish_delay";
     public const string ShutdownMethod = "tray.shutdown";
@@ -79,6 +81,10 @@ public sealed record TrayHealth(
     string PowerMonitorStatus);
 
 public sealed record TrayCoreStatus(CoreSnapshot Snapshot, long CoreGeneration);
+
+public sealed record TraySubscriptionProvidersRequest(string SubscriptionId);
+
+public sealed record TraySubscriptionProviderSyncRequest(string SubscriptionId, string ProviderType, string ProviderName);
 
 public sealed record TrayCoreOperationResult(
     bool IsSuccess,
