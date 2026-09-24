@@ -2,50 +2,27 @@ using Stelliberty.Domain.Subscriptions;
 namespace Stelliberty.Application.Subscriptions;
 
 public sealed class SelectedSubscriptionProviderCatalogLoader(
-    ISubscriptionStore subscriptionStore,
-    ISubscriptionSelectionStore selectionStore,
-    SubscriptionProviderParser parser,
-    ISubscriptionProviderSyncer? syncer = null,
-    ISubscriptionProviderStateReader? stateReader = null)
+    SubscriptionProviderSnapshotService snapshots,
+    ISubscriptionProviderSource source)
 {
-    public SubscriptionProviderCatalog LoadCatalog()
-    {
-        return LoadCatalog(selectionStore.GetCurrentSubscriptionId()
-            ?? throw new InvalidOperationException("No subscription is selected"));
-    }
-
     public SubscriptionProviderCatalog LoadCatalog(string subscriptionId)
     {
-        return new SubscriptionProviderCatalog(LoadProviders(subscriptionId), syncer);
+        return CreateCatalog(snapshots.ReadCached(subscriptionId));
     }
 
     public async Task<SubscriptionProviderCatalog> LoadCatalogAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
-        var providers = LoadProviders(subscriptionId);
-        if (stateReader is null || !string.Equals(selectionStore.GetCurrentSubscriptionId(), subscriptionId, StringComparison.Ordinal))
-        {
-            return new SubscriptionProviderCatalog(providers, syncer);
-        }
-
-        var states = await stateReader.ReadStatesAsync(cancellationToken);
-        if (states.Count == 0)
-        {
-            return new SubscriptionProviderCatalog(providers, syncer);
-        }
-
-        var statesByKey = states.ToDictionary(state => (state.Type, state.Name));
-        var merged = providers
-            .Select(provider => statesByKey.TryGetValue((provider.Type, provider.Name), out var state)
-                ? provider with { Count = state.Count, UpdatedAt = state.UpdatedAt }
-                : provider)
-            .ToList();
-        return new SubscriptionProviderCatalog(merged, syncer);
+        return CreateCatalog(await source.ReadAsync(subscriptionId, cancellationToken));
     }
 
-    private IReadOnlyList<SubscriptionProvider> LoadProviders(string subscriptionId)
+    private SubscriptionProviderCatalog CreateCatalog(SubscriptionProviderSnapshot snapshot)
     {
-        var subscription = subscriptionStore.LoadSubscriptions().FirstOrDefault(item => item.Id == subscriptionId)
-            ?? throw new InvalidOperationException($"Selected subscription not found: {subscriptionId}");
-        return parser.Parse(subscriptionStore.ReadContent(subscription.Id));
+        return new(snapshot.Providers, snapshot.IsCurrent ? new ScopedSyncer(source, snapshot.SubscriptionId) : null, snapshot);
+    }
+
+    private sealed class ScopedSyncer(ISubscriptionProviderSource source, string subscriptionId) : ISubscriptionProviderSyncer
+    {
+        public Task SyncAsync(SubscriptionProvider provider, CancellationToken cancellationToken = default) =>
+            source.SyncAsync(subscriptionId, provider.Type, provider.Name, cancellationToken);
     }
 }

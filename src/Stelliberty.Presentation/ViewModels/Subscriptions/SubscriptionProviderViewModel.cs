@@ -52,6 +52,8 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
 
     public event EventHandler<SubscriptionProviderSyncCompletedEventArgs>? ProvidersSynced;
 
+    public event EventHandler<SubscriptionProviderSnapshot>? SnapshotChanged;
+
     public event EventHandler? DialogStateChanged;
 
     public event EventHandler<(string Message, ToastType Type)>? ToastRequested;
@@ -290,6 +292,10 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
         }
 
         RaiseProviderStateChanged();
+        if (catalog.Snapshot is { } snapshot)
+        {
+            SnapshotChanged?.Invoke(this, snapshot);
+        }
     }
 
     private void CloseSelector()
@@ -539,6 +545,12 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        if (_catalog?.Snapshot is { IsCurrent: false })
+        {
+            ShowErrorToast(Localize("Subscriptions.Toast.ProviderUploadFailed"));
+            return;
+        }
+
         var provider = _catalog?.VisibleProviders.FirstOrDefault(item => item.Name == request.ProviderName);
         if (provider is null)
         {
@@ -655,7 +667,10 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
             provider.Count,
             provider.UpdatedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? Localize("Common.NotUpdated"),
             HasRuntimeState: provider.UpdatedAt is not null,
-            Localization: _localization);
+            Localization: _localization,
+            TrafficInfo: provider.TrafficInfo,
+            CanManage: _catalog?.Snapshot?.IsCurrent ?? true,
+            IsCached: _catalog?.Snapshot?.IsCached == true);
     }
 
     private void ShowErrorToast(string message)

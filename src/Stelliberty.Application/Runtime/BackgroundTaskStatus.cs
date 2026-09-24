@@ -7,4 +7,5 @@ public sealed record BackgroundTaskStatus(
     long SubscriptionRevision,
     AppUpdateAutoCheckResult? AppUpdate,
     string? DelaySubscriptionId,
-    IReadOnlyDictionary<string, int> Delays);
+    IReadOnlyDictionary<string, int> Delays,
+    long ProviderRevision = 0);

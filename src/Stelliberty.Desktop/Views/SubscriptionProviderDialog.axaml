@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Stelliberty.Desktop.Controls"
+             xmlns:iconPacks="https://github.com/MahApps/IconPacks.Avalonia"
+             xmlns:loc="using:Stelliberty.Desktop.Localization"
+             xmlns:vm="using:Stelliberty.Presentation.ViewModels"
+             x:Class="Stelliberty.Desktop.Views.SubscriptionProviderDialog"
+             x:CompileBindings="True"
+             x:DataType="vm:SubscriptionProviderViewModel">
+  <UserControl.Resources>
+    <DataTemplate x:Key="ProviderItemTemplate" x:DataType="vm:SubscriptionProviderItemViewModel">
+      <Border Classes="surface-panel list" Padding="16,14" Margin="0,0,0,10">
+        <Grid RowDefinitions="Auto,Auto" RowSpacing="12">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+            <Border Classes="surface-card-badge" Tag="{Binding VehicleBadgeTag}" VerticalAlignment="Top"
+                    ToolTip.Tip="{Binding DisplayName}">
+              <iconPacks:PackIconMingCuteIcons Width="18" Height="18" Kind="{Binding VehicleIconType}" />
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+              <!-- 名称限宽，为同行类型标签和操作按钮留出空间。 -->
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock AutomationProperties.AutomationId="{Binding NameAutomationId}"
+                           Classes="settings-row-title" Text="{Binding Name}"
+                           ToolTip.Tip="{Binding Name}" TextTrimming="CharacterEllipsis"
+                           MaxWidth="240"
+                           VerticalAlignment="Center" />
+                <Border Classes="list-pill" Tag="{Binding VehiclePillTag}" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding VehicleText}" />
+                </Border>
+              </StackPanel>
+              <TextBlock AutomationProperties.AutomationId="{Binding StatAutomationId}"
+                         Classes="settings-row-subtitle" Text="{Binding StatText}"
+                         TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <!-- 远程同步与本地上传互斥，操作区不预留禁用按钮。 -->
+            <Grid Grid.Column="2" VerticalAlignment="Center">
+              <Button Classes="dialog-secondary" Padding="12,7"
+                      AutomationProperties.AutomationId="{Binding UploadAutomationId}"
+                      Click="OnProviderUploadClicked" CommandParameter="{Binding Name}"
+                      IsVisible="{Binding IsFile}" IsEnabled="{Binding CanUpload}" Content="{loc:Loc Common.Upload}" />
+              <Button Classes="dialog-secondary" Padding="12,7"
+                      AutomationProperties.AutomationId="{Binding SyncAutomationId}"
+                      IsVisible="{Binding IsRemote}" IsEnabled="{Binding IsSyncEnabled}"
+                      Command="{Binding ((vm:SubscriptionProviderViewModel)DataContext).SyncProviderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                      CommandParameter="{Binding Name}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{loc:Loc Subscriptions.Provider.Sync}" VerticalAlignment="Center" />
+                  <iconPacks:PackIconMingCuteIcons Classes="button-spinner" IsVisible="{Binding IsSyncing}" Kind="LoadingFill" />
+                </StackPanel>
+              </Button>
+            </Grid>
+          </Grid>
+          <StackPanel Grid.Row="1" Spacing="8" IsVisible="{Binding IsTrafficVisible}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <TextBlock Text="{loc:Loc Home.Subscription.Field.Traffic}" FontSize="12"
+                         Foreground="{DynamicResource AppTextTertiaryBrush}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" AutomationProperties.AutomationId="{Binding TrafficAutomationId}"
+                         Text="{Binding TrafficText}" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource AppTextPrimaryBrush}" />
+            </Grid>
+            <ProgressBar Classes="provider-traffic" Classes.warning="{Binding IsTrafficWarning}"
+                         AutomationProperties.AutomationId="{Binding TrafficBarAutomationId}"
+                         IsVisible="{Binding HasTrafficTotal}" Maximum="1" Height="4"
+                         Value="{Binding TrafficUsageRatio}" />
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+              <TextBlock Text="{loc:Loc Subscriptions.Traffic.Expire}" FontSize="12"
+                         Foreground="{DynamicResource AppTextTertiaryBrush}" />
+              <TextBlock Grid.Column="1" Classes="provider-warning" Classes.warning="{Binding IsExpireWarning}"
+                         AutomationProperties.AutomationId="{Binding ExpireAutomationId}"
+                         Text="{Binding ExpireText}" FontSize="12" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="2" Classes="provider-warning warning"
+                         AutomationProperties.AutomationId="{Binding ExpireStatusAutomationId}"
+                         IsVisible="{Binding IsExpireWarning}" Text="{Binding ExpireStatusText}" FontSize="12" />
+            </Grid>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+  <!-- 弹层由窗口承载，避免受到订阅列表的裁剪。 -->
+  <controls:OverlayDialogHost AutomationProperties.AutomationId="Subscriptions.ProviderDialogOverlay"
+                              IsOpen="{Binding IsProviderSelectorDialogVisible}">
+    <controls:OverlayDialogHost.DialogContent>
+      <controls:DialogPanel PanelWidth="600" ContentPadding="0,0,2,0"
+                            AutomationProperties.AutomationId="Subscriptions.ProviderSelectorDialog"
+                            IsOpen="{Binding IsProviderSelectorDialogVisible}">
+        <controls:DialogPanel.DialogContent>
+          <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="16">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="24,24,24,0">
+              <TextBlock Classes="dialog-title" Text="{loc:Loc Subscriptions.Dialog.Provider.Title}" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="dialog-close"
+                      AutomationProperties.AutomationId="Subscriptions.ProviderSelector.HeaderCloseButton"
+                      Command="{Binding CloseProviderSelectorCommand}">
+                <iconPacks:PackIconMingCuteIcons Width="16" Height="16" Kind="CloseFill" />
+              </Button>
+            </Grid>
+            <TextBox Grid.Row="1" Classes="dialog-input" Margin="24,0,24,0"
+                     AutomationProperties.AutomationId="Subscriptions.ProviderSelector.SearchBox"
+                     PlaceholderText="{loc:Loc Subscriptions.Provider.Search.Placeholder}"
+                     Text="{Binding ProviderSearchKeyword, Mode=TwoWay}"
+                     IsEnabled="{Binding IsDialogInteractionEnabled}" />
+            <ScrollViewer Grid.Row="2" MaxHeight="490"
+                          AutomationProperties.AutomationId="Subscriptions.ProviderSelector.ScrollViewer"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                          IsEnabled="{Binding IsDialogInteractionEnabled}">
+              <StackPanel Spacing="4" Margin="24,0,22,0">
+                <TextBlock Classes="settings-row-title" IsVisible="{Binding HasProxyProviders}"
+                           Margin="0,2,0,6" Text="{loc:Loc Subscriptions.Provider.ProxyGroupTitle}" />
+                <ItemsControl AutomationProperties.AutomationId="Subscriptions.ProviderSelector.ProxyList"
+                              IsVisible="{Binding HasProxyProviders}" ItemsSource="{Binding FilteredProxyProviders}"
+                              ItemTemplate="{StaticResource ProviderItemTemplate}" />
+                <TextBlock Classes="settings-row-title" IsVisible="{Binding HasRuleProviders}"
+                           Margin="0,8,0,6" Text="{loc:Loc Subscriptions.Provider.RuleGroupTitle}" />
+                <ItemsControl AutomationProperties.AutomationId="Subscriptions.ProviderSelector.RuleList"
+                              IsVisible="{Binding HasRuleProviders}" ItemsSource="{Binding FilteredRuleProviders}"
+                              ItemTemplate="{StaticResource ProviderItemTemplate}" />
+              </StackPanel>
+            </ScrollViewer>
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,4,24,24">
+              <Button Classes="dialog-secondary" AutomationProperties.AutomationId="Subscriptions.ProviderSelector.CloseButton"
+                      Command="{Binding CloseProviderSelectorCommand}" Content="{loc:Loc Common.Close}" />
+              <Button Classes="dialog-primary" AutomationProperties.AutomationId="Subscriptions.ProviderSelector.SyncAllButton"
+                      Command="{Binding SyncAllProvidersCommand}" IsEnabled="{Binding CanSyncAll}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{loc:Loc Subscriptions.Provider.SyncAll}" VerticalAlignment="Center" />
+                  <iconPacks:PackIconMingCuteIcons Classes="button-spinner" IsVisible="{Binding IsSyncingAll}" Kind="LoadingFill" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Grid>
+        </controls:DialogPanel.DialogContent>
+      </controls:DialogPanel>
+    </controls:OverlayDialogHost.DialogContent>
+  </controls:OverlayDialogHost>
+</UserControl>

@@ -76,6 +76,15 @@ internal sealed class TrayBackgroundTasks : IAsyncDisposable
             new WebDavDataBackupService(new FileDataBackupService(TrayApplicationLayout.AppDataDirectory), _backupStore));
 
         await Task.WhenAll(
+            // 低频采集提供者额度，界面关闭后仍保留最新记录。
+            RunLoopAsync("provider snapshots", TimeSpan.FromSeconds(30), async (_, token) =>
+            {
+                var revision = await _coreRuntime.RefreshProvidersAsync(token).ConfigureAwait(false);
+                if (revision != Status.ProviderRevision)
+                {
+                    Publish(status => status with { ProviderRevision = revision });
+                }
+            }, cancellationToken),
             RunLoopAsync("service heartbeat", TimeSpan.FromSeconds(10),
                 (_, token) => _coreRuntime.SendHeartbeatAsync(token), cancellationToken),
             RunLoopAsync("subscription updates", TimeSpan.FromMinutes(1), async (startup, token) =>

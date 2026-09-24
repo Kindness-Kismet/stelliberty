@@ -1,4 +1,6 @@
 using Stelliberty.Domain.Subscriptions;
+using System.Security.Cryptography;
+using System.Text;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 
@@ -126,8 +128,11 @@ public sealed class SubscriptionProviderParser
             vehicleType,
             Scalar(node, "path"),
             Count(node, providerType),
-            null);
+            null,
+            SourceFingerprint: Fingerprint(node.ToString()));
     }
+
+    public static string Fingerprint(string content) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 
     private static int Count(YamlMappingNode node, string providerType)
     {

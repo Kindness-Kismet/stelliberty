@@ -193,7 +193,11 @@ public sealed partial class SubscriptionPageViewModel
         }
 
         _subscriptionStore.SaveContent(subscription.Id, args.Content);
+        _providerSnapshots.Remove(subscription.Id);
+        RefreshPersistedSubscriptionRows([subscription.Id]);
+        RaiseSubscriptionStateChanged();
         SubscriptionFileEdited?.Invoke(this, subscription.Id);
+        _ = RefreshProviderTrafficAsync();
     }
 
     private void ShowChainProxyDialog(string? subscriptionId)

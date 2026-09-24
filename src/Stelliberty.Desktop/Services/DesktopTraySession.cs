@@ -1,10 +1,11 @@
 using Stelliberty.Application.Runtime;
 using Stelliberty.Application.Proxies;
+using Stelliberty.Application.Subscriptions;
 using Stelliberty.Infrastructure.Tray;
 
 namespace Stelliberty.Desktop.Services;
 
-internal sealed class DesktopTraySession : IDisposable, IProxyDelayResultSink
+internal sealed class DesktopTraySession : IDisposable, IProxyDelayResultSink, ISubscriptionProviderSource
 {
     private readonly TrayIpcClient _client = new();
     private string? _sessionId;
@@ -59,6 +60,12 @@ internal sealed class DesktopTraySession : IDisposable, IProxyDelayResultSink
 
     public Task PublishAsync(ProxyDelayPublication publication, CancellationToken cancellationToken = default) =>
         _client.PublishProxyDelayAsync(publication, cancellationToken);
+
+    public Task<SubscriptionProviderSnapshot> ReadAsync(string subscriptionId, CancellationToken cancellationToken = default) =>
+        _client.GetSubscriptionProvidersAsync(subscriptionId, cancellationToken);
+
+    public Task SyncAsync(string subscriptionId, string providerType, string providerName, CancellationToken cancellationToken = default) =>
+        _client.SyncSubscriptionProviderAsync(subscriptionId, providerType, providerName, cancellationToken);
 
     private void OnBackgroundChanged(object? sender, BackgroundTaskStatus status) =>
         BackgroundChanged?.Invoke(this, status);

@@ -168,6 +168,7 @@ public sealed partial class MainWindow : Window
             || DialogHost.IsOpen
             || UpdateDialogHost.IsOpen
             || DataContext is not MainWindowViewModel viewModel
+            || viewModel.SubscriptionPage.Provider.IsProviderSelectorDialogVisible
             || viewModel.CurrentPage != AppNavigationPage.Settings
             || !viewModel.Settings.IsBackVisible)
         {

@@ -1,4 +1,5 @@
 using Stelliberty.Application.Localization;
+using Stelliberty.Application.Subscriptions;
 using Stelliberty.Domain.Subscriptions;
 using Stelliberty.Presentation.Formatting;
 
@@ -9,6 +10,9 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
     private bool _isCurrent;
     private bool _isUpdating;
     private readonly ILocalizationService? _localization;
+    private readonly bool _hasSubscriptionTrafficInfo;
+    private SubscriptionProviderSnapshot? _providerSnapshot;
+    private SubscriptionProviderTrafficSummary? _providerSummary;
 
     public SubscriptionItemViewModel(
         string id,
@@ -32,7 +36,9 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         string? lastError = null,
         DateTimeOffset? lastErrorAt = null,
         SubscriptionSourceFormat sourceFormat = SubscriptionSourceFormat.StandardClash,
-        ILocalizationService? localization = null)
+        ILocalizationService? localization = null,
+        bool hasTrafficInfo = false,
+        SubscriptionProviderSnapshot? providerSnapshot = null)
     {
         Id = id;
         Name = name;
@@ -52,10 +58,13 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         TrafficUsed = trafficUsed;
         TrafficTotal = trafficTotal;
         TrafficExpire = trafficExpire;
+        _hasSubscriptionTrafficInfo = hasTrafficInfo || trafficTotal > 0 || trafficUsed > 0;
         LastError = lastError;
         LastErrorAt = lastErrorAt;
         SourceFormat = sourceFormat;
         _localization = localization;
+        _providerSnapshot = providerSnapshot;
+        _providerSummary = providerSnapshot?.GetTrafficSummary();
     }
 
     public string Id { get; }
@@ -86,6 +95,7 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
             if (SetProperty(ref _isCurrent, value))
             {
                 OnPropertyChanged(nameof(MenuOptions));
+                OnPropertyChanged(nameof(TrafficTooltip));
             }
         }
     }
@@ -160,17 +170,48 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         ? string.Format(Localize("Subscriptions.ChainProxy.Count"), ChainProxyCount)
         : Localize("Subscriptions.ChainProxy.None");
 
-    public string TrafficText => TrafficTotal > 0 ? $"{ByteSize.Format(TrafficUsed)} / {ByteSize.Format(TrafficTotal)}" : Localize("Subscriptions.Traffic.Unavailable");
+    private SubscriptionTrafficInfo? DisplayedTraffic => HasProviderTraffic
+        ? _providerSummary!.TrafficInfo
+        : _hasSubscriptionTrafficInfo ? SubscriptionTrafficInfo.FromValues(0, TrafficUsed, TrafficTotal, TrafficExpire) : null;
 
-    public bool HasTrafficInfo => TrafficTotal > 0;
+    public bool HasProviderTraffic => _providerSummary is { ProviderCount: > 0 };
 
-    public double TrafficUsageRatio => TrafficTotal > 0 ? Math.Clamp((double)TrafficUsed / TrafficTotal, 0, 1) : 0;
+    public string TrafficLabel => _providerSummary is { ProviderCount: > 0 } summary
+        ? summary.AvailableProviderCount < summary.ProviderCount
+            ? string.Format(Localize("Subscriptions.Traffic.Partial"), summary.AvailableProviderCount, summary.ProviderCount)
+            : Localize("Subscriptions.Traffic.Aggregate")
+        : Localize("Home.Subscription.Field.Traffic");
 
-    public string ExpireText => TrafficExpire > 0
-        ? DateTimeOffset.FromUnixTimeSeconds(TrafficExpire).ToLocalTime().ToString("yyyy-MM-dd")
+    public string TrafficTooltip => HasProviderTraffic && _providerSnapshot is { ObservedAt: { } observedAt }
+        && (!IsCurrent || !_providerSnapshot.IsCurrent || _providerSnapshot.IsCached)
+            ? string.Format(Localize("Subscriptions.Traffic.Cached"), observedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"))
+            : TrafficLabel;
+
+    public string ExpireTooltip => HasProviderTraffic
+        ? Localize(_providerSummary!.HasCompleteExpiry ? "Subscriptions.Traffic.EarliestExpiry" : "Subscriptions.Traffic.KnownEarliestExpiry")
+        : Localize("Subscriptions.Traffic.Expire");
+
+    public string TrafficText => DisplayedTraffic is { } info
+        ? $"{ByteSize.Format(info.Used)} / {(HasTrafficTotal ? ByteSize.Format(info.Total) : Localize("Subscriptions.Traffic.TotalUnknown"))}"
+        : Localize("Subscriptions.Traffic.Unavailable");
+
+    public bool HasTrafficInfo => DisplayedTraffic is not null;
+
+    public bool HasTrafficTotal => DisplayedTraffic is { Total: > 0 };
+
+    public string TrafficAutomationId => $"Subscriptions.Row.{Id}.TrafficText";
+
+    public string TrafficLabelAutomationId => $"Subscriptions.Row.{Id}.TrafficLabel";
+
+    public string ExpireAutomationId => $"Subscriptions.Row.{Id}.ExpireText";
+
+    public double TrafficUsageRatio => DisplayedTraffic is { Total: > 0 } info ? Math.Clamp((double)info.Used / info.Total, 0, 1) : 0;
+
+    public string ExpireText => DisplayedTraffic is { Expire: > 0 } info
+        ? DateTimeOffset.FromUnixTimeSeconds(info.Expire).ToLocalTime().ToString("yyyy-MM-dd")
         : Localize("Common.Unknown");
 
-    public bool IsExpireInfoVisible => !IsLocalFile;
+    public bool IsExpireInfoVisible => !IsLocalFile || HasProviderTraffic || TrafficExpire > 0;
 
     public int LastUpdatedInfoColumnSpan => IsExpireInfoVisible ? 1 : 2;
 
@@ -247,7 +288,31 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
             LastError,
             LastErrorAt,
             SourceFormat,
-            _localization);
+            _localization,
+            _hasSubscriptionTrafficInfo,
+            _providerSnapshot);
+    }
+
+    public void ApplyProviderSnapshot(SubscriptionProviderSnapshot snapshot)
+    {
+        _providerSnapshot = snapshot;
+        _providerSummary = snapshot.GetTrafficSummary();
+        OnPropertyChanged(nameof(HasProviderTraffic));
+        OnPropertyChanged(nameof(HasTrafficInfo));
+        OnPropertyChanged(nameof(HasTrafficTotal));
+        OnPropertyChanged(nameof(TrafficUsageRatio));
+        OnPropertyChanged(nameof(IsExpireInfoVisible));
+        OnPropertyChanged(nameof(LastUpdatedInfoColumnSpan));
+        RefreshTrafficLanguage();
+    }
+
+    private void RefreshTrafficLanguage()
+    {
+        OnPropertyChanged(nameof(TrafficLabel));
+        OnPropertyChanged(nameof(TrafficText));
+        OnPropertyChanged(nameof(TrafficTooltip));
+        OnPropertyChanged(nameof(ExpireText));
+        OnPropertyChanged(nameof(ExpireTooltip));
     }
 
     public IReadOnlyList<SubscriptionRowMenuSelection> MenuOptions
@@ -291,8 +356,7 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(LastUpdatedText));
         OnPropertyChanged(nameof(OverrideSummaryText));
         OnPropertyChanged(nameof(ChainProxySummaryText));
-        OnPropertyChanged(nameof(TrafficText));
-        OnPropertyChanged(nameof(ExpireText));
+        RefreshTrafficLanguage();
         OnPropertyChanged(nameof(MenuOptions));
     }
 

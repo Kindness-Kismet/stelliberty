@@ -4,4 +4,5 @@ namespace Stelliberty.Application.Subscriptions;
 
 public sealed record SelectedSubscriptionRuntimeResult(
     Subscription Subscription,
-    string RuntimeConfigContent);
+    string RuntimeConfigContent,
+    string ContentFingerprint);

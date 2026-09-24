@@ -47,6 +47,7 @@ public sealed partial class App : Avalonia.Application
     private MainWindow? _mainWindow;
     private long _backgroundRevision = -1;
     private long _subscriptionRevision;
+    private long _providerRevision;
     private AppUpdateAutoCheckResult? _lastAppUpdate;
     private DispatcherTimer? _homeRuntimeTimer;
     // 主动退出最多等待服务核心 5 秒，普通核心在 Rust 侧使用相同总预算。
@@ -147,14 +148,11 @@ public sealed partial class App : Avalonia.Application
                 runtimeStore,
                 ruleOverrideService: ruleOverrideService);
             var subscriptionDeleter = new SubscriptionDeleter(subscriptionStore, subscriptionSelectionStore, runtimeStore, ruleOverrideStore, proxySelectionStore);
-            // Provider 同步和状态读取始终走核心管道，保持 Debug 和 Release 路径一致。
-            var coreProviderClient = new PipeCoreProviderClient(TrayCoreEndpoints.Core);
             var providerCatalogLoader = new SelectedSubscriptionProviderCatalogLoader(
-                subscriptionStore,
-                subscriptionSelectionStore,
-                new SubscriptionProviderParser(),
-                coreProviderClient,
-                coreProviderClient);
+                new SubscriptionProviderSnapshotService(subscriptionStore,
+                    new FileSubscriptionProviderSnapshotStore(platformDirectories.RuntimeDirectory),
+                    new SubscriptionProviderParser()),
+                _traySession);
             ISubscriptionProviderUploader subscriptionProviderUploader = new FileSubscriptionProviderUploader(platformDirectories.CoreDirectory);
             ISubscriptionFileOpener subscriptionFileOpener = new DesktopSubscriptionFileOpener(subscriptionStore.GetContentPath);
             IOverrideFileOpener overrideFileOpener = new DesktopOverrideFileOpener(overrideStore.GetContentPath);
@@ -341,7 +339,7 @@ public sealed partial class App : Avalonia.Application
                 globalHotkeyService.Dispose();
                 coreManager.Dispose();
                 DisposeOwnedServices(selectionRestoringCoreManager, proxyCoreClient, proxyDelayTester,
-                    coreProviderClient, webDavBackupStore, systemProxyService, serviceModeManager);
+                    webDavBackupStore, systemProxyService, serviceModeManager);
                 AppLogger.Info("Desktop UI session closed");
             };
             if (_traySession.IsDisconnected)
@@ -473,6 +471,11 @@ public sealed partial class App : Avalonia.Application
             _subscriptionRevision = status.SubscriptionRevision;
             await viewModel.SubscriptionPage.InitializeAsync();
             await viewModel.ProxyPage.RefreshProxiesAsync();
+        }
+        if (status.ProviderRevision != _providerRevision)
+        {
+            _providerRevision = status.ProviderRevision;
+            await viewModel.SubscriptionPage.RefreshProviderTrafficAsync();
         }
         viewModel.ProxyPage.ApplyBackgroundDelays(status.DelaySubscriptionId, status.Delays);
     }

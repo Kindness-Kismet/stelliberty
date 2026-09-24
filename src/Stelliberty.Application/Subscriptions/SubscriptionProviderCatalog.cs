@@ -3,8 +3,11 @@ namespace Stelliberty.Application.Subscriptions;
 
 public sealed class SubscriptionProviderCatalog(
     IReadOnlyList<SubscriptionProvider> providers,
-    ISubscriptionProviderSyncer? syncer = null)
+    ISubscriptionProviderSyncer? syncer = null,
+    SubscriptionProviderSnapshot? snapshot = null)
 {
+    public SubscriptionProviderSnapshot? Snapshot { get; } = snapshot;
+
     private readonly List<string> _syncedProviderNames = [];
 
     public IReadOnlyList<SubscriptionProvider> VisibleProviders => providers.Where(item => item.IsVisible).ToList();

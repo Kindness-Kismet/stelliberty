@@ -219,6 +219,8 @@
     <controls:OverlayDialogHost x:Name="DialogHost"
                                 Grid.RowSpan="2" />
 
+    <views:SubscriptionProviderDialog Grid.RowSpan="2" DataContext="{Binding SubscriptionPage.Provider}" />
+
     <controls:OverlayDialogHost x:Name="UpdateDialogHost"
                                 Grid.RowSpan="2"
                                 AutomationProperties.AutomationId="Settings.UpdateDialogOverlay"

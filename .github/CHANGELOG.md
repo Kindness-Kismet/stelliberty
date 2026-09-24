@@ -1,11 +1,9 @@
-- Fixed an issue with the rule page that previously hid rules and proxy groups introduced by subscription overrides, which also prevented custom rules from targeting those proxy groups
-- Fixed an issue with rule editing before the rule baseline was ready, which previously allowed duplicate rules and a broken rule order to reach the core
-- Removed proxy group menus from the tray; this feature is temporarily unavailable because the Avalonia memory usage issue cannot be resolved for now
-- Changed the app icons in preparation for the upcoming Stelliberty mobile app
+- Added traffic and expiry details to remote proxy providers, so you can now view each provider's usage and quota with low-quota and expiry warnings
+- Improved subscription cards and the home subscription card, which now show combined remote provider usage and the earliest expiry while identifying unknown totals and incomplete data
+- Improved provider usage updates, which now refresh card totals after synchronization and preserve the last recorded usage when switching subscriptions
 
 ---
 
-- 修复了关于规则页的错误，该问题曾导致订阅覆写引入的规则和代理组不显示，自定义规则也无法指向这些代理组
-- 修复了关于规则基线就绪前编辑规则的错误，该问题曾导致重复规则和错乱的规则顺序进入核心
-- 移除了托盘代理组菜单，由于目前无法解决 Avalonia 的内存占用问题，此功能暂时移除
-- 调整了应用图标，为即将到来的 Stelliberty 移动端做好准备
+- 新增了远程代理提供者的流量与到期明细，现在可以查看各提供者的用量、额度，以及余量不足和到期提醒
+- 对订阅卡片和主页当前订阅卡片的流量展示进行了改善，这使得多个远程提供者的用量和最早到期时间能够汇总显示，并区分总量未知与数据不完整的情况
+- 对提供者流量更新进行了改善，这使得同步后卡片合计能够及时刷新，切换订阅后也能保留上次记录的用量

@@ -48,7 +48,8 @@ public sealed class SelectedSubscriptionRuntimeGenerator(
 
         return new SelectedSubscriptionRuntimeResult(
             subscription,
-            runtimeConfig.RuntimeConfigContent);
+            runtimeConfig.RuntimeConfigContent,
+            SubscriptionProviderParser.Fingerprint(originalContent));
     }
 
     private string ReadOriginalContent(Subscription subscription)
