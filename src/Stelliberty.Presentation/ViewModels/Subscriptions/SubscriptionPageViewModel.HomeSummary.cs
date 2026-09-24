@@ -14,10 +14,6 @@ public sealed partial class SubscriptionPageViewModel
 
     public string HomeCardTypeTag => CurrentSubscription?.TypePillTag ?? "local";
 
-    public bool HomeCardIsLocal => CurrentSubscription?.IsLocalFile ?? true;
-
-    public bool HomeCardIsRemote => !HomeCardIsLocal;
-
     public string HomeCardSourceFormatText => CurrentSubscription?.SourceFormatText
         ?? Localize("Subscriptions.SourceFormat.Standard");
 
@@ -37,6 +33,10 @@ public sealed partial class SubscriptionPageViewModel
     public double HomeCardTrafficRatio => CurrentSubscription?.TrafficUsageRatio ?? 0;
 
     public bool HomeCardHasTrafficInfo => CurrentSubscription?.HasTrafficInfo == true;
+
+    public bool HomeCardHasTrafficTotal => CurrentSubscription?.HasTrafficTotal == true;
+
+    public bool HomeCardHasExpireInfo => CurrentSubscription?.IsExpireInfoVisible == true;
 
     public bool HomeCardHasContent => CurrentSubscription is not null;
 
@@ -63,8 +63,6 @@ public sealed partial class SubscriptionPageViewModel
         OnPropertyChanged(nameof(HomeCardNameText));
         OnPropertyChanged(nameof(HomeCardTypeText));
         OnPropertyChanged(nameof(HomeCardTypeTag));
-        OnPropertyChanged(nameof(HomeCardIsLocal));
-        OnPropertyChanged(nameof(HomeCardIsRemote));
         OnPropertyChanged(nameof(HomeCardSourceFormatText));
         OnPropertyChanged(nameof(HomeCardSourceFormatTag));
         OnPropertyChanged(nameof(HomeCardUpdatedText));
@@ -72,6 +70,8 @@ public sealed partial class SubscriptionPageViewModel
         OnPropertyChanged(nameof(HomeCardTrafficText));
         OnPropertyChanged(nameof(HomeCardTrafficRatio));
         OnPropertyChanged(nameof(HomeCardHasTrafficInfo));
+        OnPropertyChanged(nameof(HomeCardHasTrafficTotal));
+        OnPropertyChanged(nameof(HomeCardHasExpireInfo));
         OnPropertyChanged(nameof(HomeCardHasContent));
     }
 }

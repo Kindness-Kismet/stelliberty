@@ -324,4 +324,17 @@
   <Style Selector="ListBox.template-list ListBoxItem:selected Border.surface-panel">
     <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
   </Style>
+  <!-- 弹层内容移到窗口覆盖层，提供者样式须注册在窗口。 -->
+  <Style Selector="TextBlock.provider-warning">
+    <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
+  </Style>
+  <Style Selector="TextBlock.provider-warning.warning">
+    <Setter Property="Foreground" Value="{DynamicResource ToastWarningBrush}" />
+  </Style>
+  <Style Selector="ProgressBar.provider-traffic">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+  </Style>
+  <Style Selector="ProgressBar.provider-traffic.warning">
+    <Setter Property="Foreground" Value="{DynamicResource ToastWarningBrush}" />
+  </Style>
 </Styles>

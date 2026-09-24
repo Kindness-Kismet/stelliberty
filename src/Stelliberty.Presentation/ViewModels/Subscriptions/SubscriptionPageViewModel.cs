@@ -81,22 +81,22 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         _runtimeStore = runtimeStore;
         Provider = new SubscriptionProviderViewModel(providerCatalogLoader, providerUploader, localization);
         Provider.ProvidersSynced += (sender, args) => ProvidersSynced?.Invoke(sender, args);
-        Provider.DialogStateChanged += (_, _) => OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        Provider.DialogStateChanged += (_, _) => NotifyDialogOverlayChanged();
         Provider.ToastRequested += (_, toast) => ShowToast(toast.Message, toast.Type);
         ChainProxy = new SubscriptionChainProxyDialogViewModel(localization, chainProxyContextLoader);
         ChainProxy.Saved += OnChainProxySaved;
-        ChainProxy.DialogStateChanged += (_, _) => OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        ChainProxy.DialogStateChanged += (_, _) => NotifyDialogOverlayChanged();
         OverrideSelector = new SubscriptionOverrideSelectorViewModel();
         OverrideSelector.SaveRequested += OnOverrideSelectionSaveRequested;
-        OverrideSelector.DialogStateChanged += (_, _) => OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        OverrideSelector.DialogStateChanged += (_, _) => NotifyDialogOverlayChanged();
         RuntimeConfigDialog = new SubscriptionRuntimeConfigDialogViewModel();
-        RuntimeConfigDialog.DialogStateChanged += (_, _) => OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        RuntimeConfigDialog.DialogStateChanged += (_, _) => NotifyDialogOverlayChanged();
         FileEditor = new SubscriptionFileEditorViewModel();
         FileEditor.Confirmed += OnFileEditorConfirmed;
-        FileEditor.DialogStateChanged += (_, _) => OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        FileEditor.DialogStateChanged += (_, _) => NotifyDialogOverlayChanged();
         EditDialog = new SubscriptionEditDialogViewModel(localization);
         EditDialog.Confirmed += OnEditDialogConfirmed;
-        EditDialog.DialogStateChanged += (_, _) => OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        EditDialog.DialogStateChanged += (_, _) => NotifyDialogOverlayChanged();
         AddDialog = new SubscriptionAddDialogViewModel(localization);
         AddDialog.RemoteRequested += OnAddRemoteRequested;
         AddDialog.LocalRequested += OnAddLocalRequested;
@@ -114,6 +114,7 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         CloseQrCodeDialogCommand = new RelayCommand(CloseQrCodeDialog);
         ShowOverrideSelectorCommand = new RelayCommand<string>(ShowOverrideSelector);
         ShowRuntimeConfigDialogCommand = new RelayCommand<string>(ShowRuntimeConfigDialog);
+        ShowCurrentProvidersCommand = new RelayCommand(() => Provider.Show(CurrentSubscriptionId));
         EditFileCommand = new RelayCommand<string>(EditFile);
         ShowChainProxyDialogCommand = new RelayCommand<string>(ShowChainProxyDialog);
         ShowEditDialogCommand = new RelayCommand<string>(ShowEditDialog);
@@ -221,17 +222,20 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
 
     public bool IsQrCodeDialogVisible => _isQrCodeDialogVisible;
 
-    public bool IsDialogOverlayVisible => AddDialog.IsDialogVisible
+    public bool IsDialogOverlayVisible => IsPageDialogOverlayVisible || Provider.IsProviderSelectorDialogVisible;
+
+    public bool IsPageDialogOverlayVisible => AddDialog.IsDialogVisible
         || EditDialog.IsDialogVisible
         || IsDeleteDialogVisible
         || OverrideSelector.IsDialogVisible
-        || Provider.IsProviderSelectorDialogVisible
         || RuntimeConfigDialog.IsDialogVisible
         || FileEditor.IsDialogVisible
         || ChainProxy.IsDialogVisible
         || IsQrCodeDialogVisible;
 
     public SubscriptionProviderViewModel Provider { get; }
+
+    public ICommand ShowCurrentProvidersCommand { get; }
 
     public SubscriptionAddDialogViewModel AddDialog { get; }
 
@@ -401,11 +405,6 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         return true;
     }
 
-    public Task UploadProviderAsync(string providerName, string sourcePath)
-    {
-        return Provider.UploadProviderAsync(providerName, sourcePath);
-    }
-
     private void ShowToast(string message, ToastType type = ToastType.Error)
     {
         ToastRequested?.Invoke(this, (message, type));
@@ -421,11 +420,17 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         ShowToast(Localize(localizationKey));
     }
 
+    private void NotifyDialogOverlayChanged()
+    {
+        OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        OnPropertyChanged(nameof(IsPageDialogOverlayVisible));
+    }
+
     private void OnAddDialogStateChanged(object? sender, EventArgs args)
     {
         OnPropertyChanged(nameof(IsEmptyTextVisible));
         OnPropertyChanged(nameof(IsListVisible));
-        OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        NotifyDialogOverlayChanged();
     }
 
     public void ClearCurrentSubscription()
@@ -554,7 +559,7 @@ public sealed partial class SubscriptionPageViewModel : ViewModelBase, IDisposab
         OnPropertyChanged(nameof(DeleteDialogSubscriptionId));
         OnPropertyChanged(nameof(IsDeleteDialogVisible));
         OnPropertyChanged(nameof(IsQrCodeDialogVisible));
-        OnPropertyChanged(nameof(IsDialogOverlayVisible));
+        NotifyDialogOverlayChanged();
     }
 
     public void Dispose()

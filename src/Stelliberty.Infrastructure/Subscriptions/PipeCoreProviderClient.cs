@@ -62,10 +62,34 @@ public sealed class PipeCoreProviderClient : ISubscriptionProviderSyncer, ISubsc
         var states = new List<SubscriptionProviderRuntimeState>();
         foreach (var item in providers.EnumerateObject())
         {
-            states.Add(new SubscriptionProviderRuntimeState(item.Name, providerType, ReadCount(item.Value, providerType), ReadUpdatedAt(item.Value)));
+            states.Add(new SubscriptionProviderRuntimeState(
+                item.Name, providerType, ReadCount(item.Value, providerType), ReadUpdatedAt(item.Value), ReadTrafficInfo(item.Value)));
         }
 
         return states;
+    }
+
+    private static SubscriptionTrafficInfo? ReadTrafficInfo(JsonElement provider)
+    {
+        if (!provider.TryGetProperty("subscriptionInfo", out var info) || info.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var expire = ReadTrafficValue(info, "Expire");
+        return new SubscriptionTrafficInfo(
+            ReadTrafficValue(info, "Upload"),
+            ReadTrafficValue(info, "Download"),
+            ReadTrafficValue(info, "Total"),
+            expire <= DateTimeOffset.MaxValue.ToUnixTimeSeconds() ? expire : 0);
+    }
+
+    private static long ReadTrafficValue(JsonElement info, string name)
+    {
+        return info.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt64(out var number)
+            && number >= 0 ? number : 0;
     }
 
     private static int ReadCount(JsonElement provider, string providerType)

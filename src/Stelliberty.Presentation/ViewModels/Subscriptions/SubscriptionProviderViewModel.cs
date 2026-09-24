@@ -655,7 +655,8 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
             provider.Count,
             provider.UpdatedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? Localize("Common.NotUpdated"),
             HasRuntimeState: provider.UpdatedAt is not null,
-            Localization: _localization);
+            Localization: _localization,
+            TrafficInfo: provider.TrafficInfo);
     }
 
     private void ShowErrorToast(string message)

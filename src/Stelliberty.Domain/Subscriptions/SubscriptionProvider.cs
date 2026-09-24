@@ -7,7 +7,8 @@ public sealed record SubscriptionProvider(
     string Path,
     int Count,
     DateTimeOffset? UpdatedAt,
-    bool IsUpdating = false)
+    bool IsUpdating = false,
+    SubscriptionTrafficInfo? TrafficInfo = null)
 {
     public bool IsVisible => IsHttp || string.Equals(VehicleType, "File", StringComparison.OrdinalIgnoreCase);
 

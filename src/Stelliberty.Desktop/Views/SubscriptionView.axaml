@@ -11,50 +11,6 @@
              controls:InputDefocusBehavior.IsEnabled="True"
              x:Name="SubscriptionsRoot"
              Background="Transparent">
-  <UserControl.Resources>
-    <DataTemplate x:Key="ProviderItemTemplate" x:DataType="vm:SubscriptionProviderItemViewModel">
-      <Border Classes="surface-panel list" Margin="0,0,0,8">
-        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-          <Border Classes="surface-card-badge" Tag="{Binding VehicleBadgeTag}">
-            <iconPacks:PackIconMingCuteIcons Width="18" Height="18" Kind="{Binding VehicleIconType}" />
-          </Border>
-          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock AutomationProperties.AutomationId="{Binding NameAutomationId}"
-                         Classes="settings-row-title"
-                         Text="{Binding Name}"
-                         TextTrimming="CharacterEllipsis"
-                         VerticalAlignment="Center" />
-              <Border Classes="list-pill" Tag="{Binding VehiclePillTag}" VerticalAlignment="Center">
-                <TextBlock Text="{Binding VehicleType}" />
-              </Border>
-            </StackPanel>
-            <TextBlock Classes="settings-row-subtitle" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
-            <TextBlock Classes="settings-row-subtitle" Text="{Binding StatText}" />
-          </StackPanel>
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <Button Classes="dialog-secondary"
-                    AutomationProperties.AutomationId="{Binding UploadAutomationId}"
-                    Click="OnProviderUploadClicked"
-                    CommandParameter="{Binding Name}"
-                    IsEnabled="{Binding CanUpload}"
-                    Content="{loc:Loc Common.Upload}" />
-            <Button Classes="dialog-secondary"
-                    AutomationProperties.AutomationId="{Binding SyncAutomationId}"
-                    IsVisible="{Binding CanSync}"
-                    IsEnabled="{Binding !IsSyncing}"
-                    Command="{Binding ((vm:SubscriptionPageViewModel)DataContext).Provider.SyncProviderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                    CommandParameter="{Binding Name}">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="{loc:Loc Subscriptions.Provider.Sync}" VerticalAlignment="Center" />
-                <iconPacks:PackIconMingCuteIcons Classes="button-spinner" IsVisible="{Binding IsSyncing}" Kind="LoadingFill" />
-              </StackPanel>
-            </Button>
-          </StackPanel>
-        </Grid>
-      </Border>
-    </DataTemplate>
-  </UserControl.Resources>
   <Grid x:Name="SubscriptionPageRoot"
         RowDefinitions="Auto,*" RowSpacing="16"
         DataContext="{Binding SubscriptionPage}"
@@ -140,7 +96,7 @@
                       ItemsSource="{Binding Subscriptions}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <controls:EvenWrapPanel MinItemWidth="400" ItemHeight="115" ColumnSpacing="12" RowSpacing="12" EdgePadding="0" />
+              <controls:EvenWrapPanel MinItemWidth="400" ItemHeight="140" ColumnSpacing="12" RowSpacing="12" EdgePadding="0" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
@@ -156,7 +112,7 @@
                           Command="{Binding #SubscriptionPageRoot.((vm:SubscriptionPageViewModel)DataContext).SelectSubscriptionCommand}"
                           CommandParameter="{Binding Id}" />
 
-                  <Grid Margin="14" RowDefinitions="Auto,Auto" RowSpacing="12" IsHitTestVisible="False">
+                  <Grid Margin="14" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" IsHitTestVisible="False">
                     <Grid ColumnDefinitions="Auto,*,58" ColumnSpacing="12">
                       <Border Classes="surface-card-badge"
                               Tag="{Binding IconTag}">
@@ -187,7 +143,16 @@
                       </StackPanel>
                     </Grid>
 
-                    <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,2,0,0">
+                      <TextBlock Text="{loc:Loc Home.Subscription.Field.Traffic}" FontSize="12"
+                                 Foreground="{DynamicResource AppTextTertiaryBrush}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding TrafficText}"
+                                 AutomationProperties.AutomationId="{Binding TrafficAutomationId}"
+                                 Foreground="{DynamicResource AppTextSecondaryBrush}"
+                                 FontSize="12" FontWeight="SemiBold" />
+                    </Grid>
+
+                    <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="10">
                       <Border Classes="list-info-strip"
                               Grid.ColumnSpan="{Binding LastUpdatedInfoColumnSpan}">
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
@@ -263,12 +228,6 @@
                                                           RenderTransform="translateY(1.5px)" />
                       </controls:CardMenuButton>
                     </StackPanel>
-                    <TextBlock Text="{Binding TrafficText}"
-                               IsVisible="{Binding HasTrafficInfo}"
-                               HorizontalAlignment="Right"
-                               Foreground="{DynamicResource AppTextSecondaryBrush}"
-                               FontSize="11.5"
-                               FontWeight="SemiBold" />
                   </StackPanel>
                 </Grid>
               </Border>
@@ -278,7 +237,7 @@
       </ScrollViewer>
 
       <controls:OverlayDialogHost AutomationProperties.AutomationId="Subscriptions.DialogOverlay"
-                                  IsOpen="{Binding IsDialogOverlayVisible}">
+                                  IsOpen="{Binding IsPageDialogOverlayVisible}">
         <controls:OverlayDialogHost.DialogContent>
           <Grid>
             <controls:DialogPanel PanelWidth="520"
@@ -1205,69 +1164,6 @@
               </controls:DialogPanel.DialogContent>
             </controls:DialogPanel>
 
-            <controls:DialogPanel PanelWidth="560"
-                                  ContentPadding="0,0,2,0"
-                                  AutomationProperties.AutomationId="Subscriptions.ProviderSelectorDialog"
-                                  IsOpen="{Binding Provider.IsProviderSelectorDialogVisible}">
-              <controls:DialogPanel.DialogContent>
-                <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="16">
-                  <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="24,24,24,0">
-                    <TextBlock Classes="dialog-title" Text="{loc:Loc Subscriptions.Dialog.Provider.Title}" VerticalAlignment="Center" />
-                    <Button Grid.Column="1"
-                            Classes="dialog-close"
-                            AutomationProperties.AutomationId="Subscriptions.ProviderSelector.HeaderCloseButton"
-                            Command="{Binding Provider.CloseProviderSelectorCommand}">
-                      <iconPacks:PackIconMingCuteIcons Width="16" Height="16" Kind="CloseFill" />
-                    </Button>
-                  </Grid>
-                  <TextBox Grid.Row="1"
-                           Classes="dialog-input"
-                           Margin="24,0,24,0"
-                           AutomationProperties.AutomationId="Subscriptions.ProviderSelector.SearchBox"
-                           PlaceholderText="{loc:Loc Subscriptions.Provider.Search.Placeholder}"
-                           Text="{Binding Provider.ProviderSearchKeyword, Mode=TwoWay}"
-                           IsEnabled="{Binding Provider.IsDialogInteractionEnabled}" />
-                  <ScrollViewer Grid.Row="2"
-                                AutomationProperties.AutomationId="Subscriptions.ProviderSelector.ScrollViewer"
-                                VerticalScrollBarVisibility="Auto"
-                                IsEnabled="{Binding Provider.IsDialogInteractionEnabled}">
-                    <StackPanel Spacing="4" Margin="24,0,22,0">
-                      <TextBlock Classes="settings-row-title"
-                                 IsVisible="{Binding Provider.HasProxyProviders}"
-                                 Margin="0,2,0,6"
-                                 Text="{loc:Loc Subscriptions.Provider.ProxyGroupTitle}" />
-                      <ItemsControl AutomationProperties.AutomationId="Subscriptions.ProviderSelector.ProxyList"
-                                    IsVisible="{Binding Provider.HasProxyProviders}"
-                                    ItemsSource="{Binding Provider.FilteredProxyProviders}"
-                                    ItemTemplate="{StaticResource ProviderItemTemplate}" />
-                      <TextBlock Classes="settings-row-title"
-                                 IsVisible="{Binding Provider.HasRuleProviders}"
-                                 Margin="0,8,0,6"
-                                 Text="{loc:Loc Subscriptions.Provider.RuleGroupTitle}" />
-                      <ItemsControl AutomationProperties.AutomationId="Subscriptions.ProviderSelector.RuleList"
-                                    IsVisible="{Binding Provider.HasRuleProviders}"
-                                    ItemsSource="{Binding Provider.FilteredRuleProviders}"
-                                    ItemTemplate="{StaticResource ProviderItemTemplate}" />
-                    </StackPanel>
-                  </ScrollViewer>
-                  <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,4,24,24">
-                    <Button Classes="dialog-secondary"
-                            AutomationProperties.AutomationId="Subscriptions.ProviderSelector.CloseButton"
-                            Command="{Binding Provider.CloseProviderSelectorCommand}"
-                            Content="{loc:Loc Common.Close}" />
-                    <Button Classes="dialog-primary"
-                            AutomationProperties.AutomationId="Subscriptions.ProviderSelector.SyncAllButton"
-                            Command="{Binding Provider.SyncAllProvidersCommand}"
-                            IsEnabled="{Binding Provider.CanSyncAll}">
-                      <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="{loc:Loc Subscriptions.Provider.SyncAll}" VerticalAlignment="Center" />
-                        <iconPacks:PackIconMingCuteIcons Classes="button-spinner" IsVisible="{Binding Provider.IsSyncingAll}" Kind="LoadingFill" />
-                      </StackPanel>
-                    </Button>
-                  </StackPanel>
-                </Grid>
-              </controls:DialogPanel.DialogContent>
-            </controls:DialogPanel>
 
             <controls:DialogPanel PanelWidth="420"
                                   AutomationProperties.AutomationId="Subscriptions.QrCodeDialog"

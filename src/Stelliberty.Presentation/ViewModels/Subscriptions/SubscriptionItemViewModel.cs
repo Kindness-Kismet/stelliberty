@@ -32,7 +32,8 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         string? lastError = null,
         DateTimeOffset? lastErrorAt = null,
         SubscriptionSourceFormat sourceFormat = SubscriptionSourceFormat.StandardClash,
-        ILocalizationService? localization = null)
+        ILocalizationService? localization = null,
+        bool hasTrafficInfo = false)
     {
         Id = id;
         Name = name;
@@ -52,6 +53,7 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         TrafficUsed = trafficUsed;
         TrafficTotal = trafficTotal;
         TrafficExpire = trafficExpire;
+        HasTrafficInfo = hasTrafficInfo || trafficTotal > 0 || trafficUsed > 0;
         LastError = lastError;
         LastErrorAt = lastErrorAt;
         SourceFormat = sourceFormat;
@@ -160,9 +162,15 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         ? string.Format(Localize("Subscriptions.ChainProxy.Count"), ChainProxyCount)
         : Localize("Subscriptions.ChainProxy.None");
 
-    public string TrafficText => TrafficTotal > 0 ? $"{ByteSize.Format(TrafficUsed)} / {ByteSize.Format(TrafficTotal)}" : Localize("Subscriptions.Traffic.Unavailable");
+    public string TrafficText => HasTrafficInfo
+        ? $"{ByteSize.Format(TrafficUsed)} / {(HasTrafficTotal ? ByteSize.Format(TrafficTotal) : Localize("Subscriptions.Traffic.TotalUnknown"))}"
+        : Localize("Subscriptions.Traffic.Unavailable");
 
-    public bool HasTrafficInfo => TrafficTotal > 0;
+    public bool HasTrafficInfo { get; }
+
+    public bool HasTrafficTotal => TrafficTotal > 0;
+
+    public string TrafficAutomationId => $"Subscriptions.Row.{Id}.TrafficText";
 
     public double TrafficUsageRatio => TrafficTotal > 0 ? Math.Clamp((double)TrafficUsed / TrafficTotal, 0, 1) : 0;
 
@@ -170,7 +178,7 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
         ? DateTimeOffset.FromUnixTimeSeconds(TrafficExpire).ToLocalTime().ToString("yyyy-MM-dd")
         : Localize("Common.Unknown");
 
-    public bool IsExpireInfoVisible => !IsLocalFile;
+    public bool IsExpireInfoVisible => !IsLocalFile || TrafficExpire > 0;
 
     public int LastUpdatedInfoColumnSpan => IsExpireInfoVisible ? 1 : 2;
 
@@ -247,7 +255,8 @@ public sealed class SubscriptionItemViewModel : ViewModelBase
             LastError,
             LastErrorAt,
             SourceFormat,
-            _localization);
+            _localization,
+            HasTrafficInfo);
     }
 
     public IReadOnlyList<SubscriptionRowMenuSelection> MenuOptions

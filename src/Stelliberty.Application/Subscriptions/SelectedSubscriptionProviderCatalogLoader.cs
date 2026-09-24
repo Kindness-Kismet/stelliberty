@@ -36,7 +36,7 @@ public sealed class SelectedSubscriptionProviderCatalogLoader(
         var statesByKey = states.ToDictionary(state => (state.Type, state.Name));
         var merged = providers
             .Select(provider => statesByKey.TryGetValue((provider.Type, provider.Name), out var state)
-                ? provider with { Count = state.Count, UpdatedAt = state.UpdatedAt }
+                ? provider with { Count = state.Count, UpdatedAt = state.UpdatedAt, TrafficInfo = state.TrafficInfo }
                 : provider)
             .ToList();
         return new SubscriptionProviderCatalog(merged, syncer);

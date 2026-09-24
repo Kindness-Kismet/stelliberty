@@ -41,14 +41,24 @@
             <StackPanel Grid.Row="1" Margin="0,14,0,0" Spacing="10" IsVisible="{Binding HomeCardHasContent}">
               <TextBlock Text="{Binding HomeCardNameText}" Classes="home-subscription-name large"
                          AutomationProperties.AutomationId="Home.SubscriptionNameText" />
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <Border Classes="list-pill" Tag="{Binding HomeCardTypeTag}">
-                  <TextBlock Text="{Binding HomeCardTypeText}" />
-                </Border>
-                <Border Classes="list-pill" Tag="{Binding HomeCardSourceFormatTag}">
-                  <TextBlock Text="{Binding HomeCardSourceFormatText}" />
-                </Border>
-              </StackPanel>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <Border Classes="list-pill" Tag="{Binding HomeCardTypeTag}">
+                    <TextBlock Text="{Binding HomeCardTypeText}" />
+                  </Border>
+                  <Border Classes="list-pill" Tag="{Binding HomeCardSourceFormatTag}">
+                    <TextBlock Text="{Binding HomeCardSourceFormatText}" />
+                  </Border>
+                </StackPanel>
+                <Button Grid.Column="1" Classes="soft-action" Padding="8,5"
+                        AutomationProperties.AutomationId="Home.SubscriptionProvidersButton"
+                        Command="{Binding ShowCurrentProvidersCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{loc:Loc Subscriptions.Menu.Providers}" FontSize="12" />
+                    <iconPacks:PackIconMingCuteIcons Width="12" Height="12" Kind="RightLine" />
+                  </StackPanel>
+                </Button>
+              </Grid>
               <Grid Classes="subscription-stat-band" ColumnDefinitions="*,*,*">
                 <StackPanel>
                   <TextBlock Classes="field-label" Text="{loc:Loc Home.Subscription.Field.Groups}" />
@@ -66,9 +76,13 @@
               <StackPanel Classes="subscription-traffic" IsVisible="{Binding HomeCardHasTrafficInfo}">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Classes="field-label" Text="{loc:Loc Home.Subscription.Field.Traffic}" />
-                  <TextBlock Grid.Column="1" Text="{Binding HomeCardTrafficText}" />
+                  <TextBlock Grid.Column="1" Text="{Binding HomeCardTrafficText}"
+                             AutomationProperties.AutomationId="Home.SubscriptionTrafficText" />
                 </Grid>
-                <ProgressBar Maximum="1" Height="6" Value="{Binding HomeCardTrafficRatio}" />
+                <ProgressBar Maximum="1" Height="6" Value="{Binding HomeCardTrafficRatio}"
+                             Foreground="{DynamicResource AppAccentBrush}"
+                             AutomationProperties.AutomationId="Home.SubscriptionTrafficBar"
+                             IsVisible="{Binding HomeCardHasTrafficTotal}" />
               </StackPanel>
               <Grid Classes="subscription-time-row" ColumnDefinitions="*,*">
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -76,7 +90,7 @@
                   <TextBlock Text="{Binding HomeCardUpdatedText}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                            HorizontalAlignment="Right" IsVisible="{Binding HomeCardIsRemote}">
+                            HorizontalAlignment="Right" IsVisible="{Binding HomeCardHasExpireInfo}">
                   <iconPacks:PackIconMingCuteIcons Kind="CalendarLine" />
                   <TextBlock Text="{Binding HomeCardExpireText}" />
                 </StackPanel>

@@ -32,7 +32,8 @@ public sealed partial class SubscriptionPageViewModel
             lastError: subscription.LastError,
             lastErrorAt: subscription.LastErrorAt,
             sourceFormat: subscription.SourceFormat,
-            localization: _localization);
+            localization: _localization,
+            hasTrafficInfo: subscription.TrafficInfo is not null);
     }
 
     private static SubscriptionOverrideOptionViewModel ToOverrideOption(OverrideProfile overrideProfile)

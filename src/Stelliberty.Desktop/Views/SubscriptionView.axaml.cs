@@ -394,42 +394,5 @@ public sealed partial class SubscriptionView : UserControl
         }
     }
 
-    // async void 异常会终止进程，所以在这里处理选择和上传。
-    private async void OnProviderUploadClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs args)
-    {
-        try
-        {
-            if (sender is not Button button || button.CommandParameter is not string providerName)
-            {
-                return;
-            }
-
-            // 模板按钮继承条目 VM；根 Grid 暴露页面 VM。
-            if (SubscriptionPageRoot.DataContext is not SubscriptionPageViewModel viewModel)
-            {
-                return;
-            }
-
-            if (TopLevel.GetTopLevel(button) is not { } topLevel)
-            {
-                return;
-            }
-
-            var filePath = await LocalFilePicker.PickFileAsync(
-                topLevel,
-                Localize("Subscriptions.FilePicker.Provider.Title"),
-                Localize("Subscriptions.FilePicker.Provider.Filter"),
-                ["*.yaml", "*.yml"]);
-            if (!string.IsNullOrWhiteSpace(filePath))
-            {
-                await viewModel.UploadProviderAsync(providerName, filePath);
-            }
-        }
-        catch (Exception exception)
-        {
-            AppLogger.Error(exception, "Provider file picker upload failed");
-        }
-    }
-
     private static string Localize(string key) => LocalizationManager.Translate(key);
 }
