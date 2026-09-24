@@ -102,7 +102,6 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:SubscriptionItemViewModel">
               <Border Classes="surface-card subscription"
-                      ToolTip.Tip="{Binding TrafficTooltip}"
                       Classes.selected="{Binding IsCurrent}"
                       Classes.pressed="{Binding #SubscriptionCardHit.IsPressed}">
                 <Grid>
