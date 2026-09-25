@@ -165,7 +165,6 @@
   "Connections.Detail.Path": "路径",
   "Connections.Detail.ProxyGroup": "代理组",
   "Connections.Detail.ProxyNode": "代理节点",
-  "Connections.Detail.ProxyChain": "代理链路",
   "Connections.Detail.DnsMode": "DNS 模式",
   "Connections.Detail.SpecialProxy": "特殊代理",
   "Connections.Detail.SpecialRules": "特殊规则",

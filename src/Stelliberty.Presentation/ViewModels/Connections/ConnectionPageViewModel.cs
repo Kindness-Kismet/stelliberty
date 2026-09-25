@@ -386,7 +386,6 @@ public sealed class ConnectionPageViewModel : ViewModelBase, IDisposable
             ? $"{metadata.Network}://{metadata.Host}:{metadata.DestinationPort}"
             : metadata.Description;
         var ruleText = $"{connection.Rule} {connection.RulePayload}".Trim();
-        var chainText = string.Join(" / ", connection.Chains);
 
         var groups = new[]
         {
@@ -422,8 +421,7 @@ public sealed class ConnectionPageViewModel : ViewModelBase, IDisposable
                 Row(Localize("Connections.Card.Rule"), ruleText),
                 Row(Localize("Connections.Detail.ProxyGroup"), connection.ProxyGroup),
                 Row(Localize("Connections.Detail.ProxyNode"), connection.ProxyNode, "accent"),
-                Row(Localize("Connections.Card.Chain"), chainText, "accent"),
-                Row(Localize("Connections.Detail.ProxyChain"), connection.LegacyProxyChain, "muted")
+                Row(Localize("Connections.Card.Chain"), row.ChainSummaryText, "accent")
             ]),
             Group(Localize("Connections.Detail.Group.Advanced"), [
                 Row("DSCP", metadata.Dscp == 0 ? string.Empty : metadata.Dscp.ToString(), "mono"),

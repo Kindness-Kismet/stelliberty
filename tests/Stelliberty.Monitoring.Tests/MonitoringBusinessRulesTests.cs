@@ -49,6 +49,7 @@ public sealed class MonitoringBusinessRulesTests
         Assert.Equal(["HK", "GLOBAL"], connection.Chains);
         Assert.Equal("HK", connection.ProxyNode);
         Assert.Equal("GLOBAL", connection.ProxyGroup);
+        Assert.Equal(["GLOBAL", "HK"], connection.RoutePath);
     }
 
     [Fact(DisplayName = "Connection filter classifies by the actual outbound instead of the matched policy group")]

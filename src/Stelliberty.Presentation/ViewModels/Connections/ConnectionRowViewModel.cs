@@ -74,7 +74,7 @@ public sealed class ConnectionRowViewModel : ViewModelBase
 
     public string TrafficText => $"{ByteSize.Format(_connection.Upload)} / {ByteSize.Format(_connection.Download)}";
 
-    public string ChainSummaryText => string.Join(" / ", _connection.Chains);
+    public string ChainSummaryText => string.Join(" / ", _connection.RoutePath);
 
     private static string FormatDuration(DateTimeOffset start, DateTimeOffset now)
     {

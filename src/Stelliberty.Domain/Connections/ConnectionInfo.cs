@@ -25,5 +25,6 @@ public sealed record ConnectionInfo(
 
     public bool IsDirect => ProxyNode == DirectProxy;
 
-    public string LegacyProxyChain => string.Join(" → ", Chains.Reverse());
+    // 与核心日志同序：规则命中的策略 → ... → 实际出站
+    public IEnumerable<string> RoutePath => Chains.Reverse();
 }
