@@ -16,9 +16,14 @@ public sealed record ConnectionInfo(
 
     public IReadOnlyList<string> Chains { get; init; } = Chains ?? [];
 
-    public string ProxyGroup => Chains.Count > 0 ? Chains[0] : "DIRECT";
+    private const string DirectProxy = "DIRECT";
 
-    public string ProxyNode => Chains.Count > 0 ? Chains[^1] : "DIRECT";
+    // 核心 chains 顺序：[实际出站, ..., 规则命中的策略]
+    public string ProxyGroup => Chains.Count > 0 ? Chains[^1] : DirectProxy;
+
+    public string ProxyNode => Chains.Count > 0 ? Chains[0] : DirectProxy;
+
+    public bool IsDirect => ProxyNode == DirectProxy;
 
     public string LegacyProxyChain => string.Join(" → ", Chains.Reverse());
 }

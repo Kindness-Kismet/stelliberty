@@ -487,7 +487,7 @@ public sealed class ConnectionPageViewModel : ViewModelBase, IDisposable
         long downloadSpeed = 0;
         foreach (var connection in Connections)
         {
-            if (connection.ProxyNode == "DIRECT")
+            if (connection.IsDirect)
             {
                 directCount++;
             }

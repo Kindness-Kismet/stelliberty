@@ -64,8 +64,6 @@ public sealed class ConnectionRowViewModel : ViewModelBase
 
     public string DurationText => FormatDuration(_connection.Start, _now ?? DateTimeOffset.Now);
 
-    public string ProxyNode => _connection.ProxyNode;
-
     public string Rule => _connection.Rule;
 
     public string Process => _connection.Metadata.Process;

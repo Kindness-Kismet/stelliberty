@@ -21,7 +21,7 @@ public sealed class MonitoringBusinessRulesTests
                   "id": "c1",
                   "upload": "100",
                   "download": 200,
-                  "chains": ["GLOBAL", "HK"],
+                  "chains": ["HK", "GLOBAL"],
                   "rule": "DOMAIN",
                   "rulePayload": "example.com",
                   "metadata": {
@@ -46,8 +46,28 @@ public sealed class MonitoringBusinessRulesTests
         Assert.Equal(200, connection.Download);
         Assert.Equal(DateTimeOffset.UnixEpoch, connection.Start);
         Assert.Equal("443", connection.Metadata.DestinationPort);
-        Assert.Equal(["GLOBAL", "HK"], connection.Chains);
+        Assert.Equal(["HK", "GLOBAL"], connection.Chains);
         Assert.Equal("HK", connection.ProxyNode);
+        Assert.Equal("GLOBAL", connection.ProxyGroup);
+    }
+
+    [Fact(DisplayName = "Connection filter classifies by the actual outbound instead of the matched policy group")]
+    public void ConnectionFilterClassifiesByTheActualOutboundInsteadOfTheMatchedPolicyGroup()
+    {
+        var filter = new ConnectionFilter();
+        IReadOnlyList<ConnectionInfo> connections =
+        [
+            new ConnectionInfo("direct-rule", Chains: ["DIRECT"]),
+            new ConnectionInfo("direct-via-group", Chains: ["DIRECT", "Final"]),
+            new ConnectionInfo("proxy-via-group", Chains: ["HK", "Proxy"]),
+            new ConnectionInfo("no-chain")
+        ];
+
+        var direct = filter.Apply(connections, ConnectionFilterLevel.Direct, string.Empty);
+        var proxy = filter.Apply(connections, ConnectionFilterLevel.Proxy, string.Empty);
+
+        Assert.Equal(["direct-rule", "direct-via-group", "no-chain"], direct.Select(connection => connection.Id));
+        Assert.Equal(["proxy-via-group"], proxy.Select(connection => connection.Id));
     }
 
     [Fact(DisplayName = "Connection reducer freezes when paused and clamps sample window")]
