@@ -26,7 +26,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 11.0.x
+          dotnet-version: 11.0.100-rc.1.26425.128
 
       - name: Set up Python
         uses: actions/setup-python@v6
