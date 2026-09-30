@@ -63,6 +63,19 @@ internal sealed class DesktopUiLauncher : IDesktopUiLauncher, IAsyncDisposable
 
     private static string ResolveDesktopExecutable()
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            var namedPackagedPath = Path.Combine(
+                AppContext.BaseDirectory,
+                PathConventions.DataDirectoryName,
+                PathConventions.DepsSubdirectory,
+                AppMetadata.DisplayName);
+            if (File.Exists(namedPackagedPath))
+            {
+                return namedPackagedPath;
+            }
+        }
+
         var packagedPath = Path.Combine(
             AppContext.BaseDirectory,
             PathConventions.DataDirectoryName,
