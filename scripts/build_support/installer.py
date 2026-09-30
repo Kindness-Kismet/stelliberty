@@ -164,6 +164,31 @@ def pack_macos_installers(
         ]
 
 
+def pack_macos_app(
+    metadata: AppMetadata,
+    platform_name: str,
+    configuration: str,
+    target: PlatformTarget,
+    output_dir: Path,
+) -> Path:
+    if sys.platform != "darwin":
+        raise RuntimeError("macOS app bundles can only be created on a macOS host")
+
+    if not platform_name.startswith("macos"):
+        raise RuntimeError(f"macOS app bundles do not support this platform: {platform_name}")
+
+    ensure_command("iconutil", "Missing iconutil; cannot create the macOS icon")
+    PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
+    app_path = PACKAGES_DIR / f"{display_name(metadata, configuration)}.app"
+    if app_path.exists() or app_path.is_symlink():
+        raise FileExistsError(f"macOS app bundle already exists: {app_path}")
+
+    with tempfile.TemporaryDirectory(prefix="macos-app-", dir=PACKAGES_DIR) as temp_dir:
+        staged_app = build_macos_app_bundle(metadata, platform_name, configuration, target, output_dir, Path(temp_dir))
+        staged_app.rename(app_path)
+    return app_path
+
+
 def build_macos_app_bundle(
     metadata: AppMetadata,
     platform_name: str,
