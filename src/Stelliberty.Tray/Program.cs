@@ -35,6 +35,8 @@ internal static class Program
             return ActivateExistingInstanceAsync().GetAwaiter().GetResult();
         }
 
+        TrayCoreAssets.Deploy();
+
         if (!args.Contains("--show-ui", StringComparer.Ordinal))
         {
             ActivateUiOnStart &= !new JsonAppSettingsStore(new TrayPlatformDirectories()).Load().IsSilentStartEnabled;

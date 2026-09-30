@@ -18,7 +18,9 @@ os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+from build_support.builder import CORE_ASSET_NAMES
 from build_support.console import fail, header, print_summary, timing, warn
+from build_support.paths import CORE_DIRECTORY, DATA_DIRECTORY, DEPS_DIRECTORY, SERVICE_UPDATE_DIRECTORY
 
 PORT = 20000
 COMMAND_TIMEOUT_SECONDS = 180
@@ -49,7 +51,9 @@ class PostBuildTests:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.app_log_path = self.log_dir / "stelliberty-post-build-app.log"
         self.xvfb_log_path = self.log_dir / "stelliberty-post-build-xvfb.log"
-        self.app_running_log_path = self.app_output / "data" / "applogs" / "running.logs"
+        self.app_data_dir = self.resolve_app_data_dir()
+        self.core_binary_name = "clash-mihomo-core.exe" if os_family == "windows" else "clash-mihomo-core"
+        self.app_running_log_path = self.app_data_dir / "applogs" / "running.logs"
         self.app_process: subprocess.Popen | None = None
         self.xvfb_process: subprocess.Popen | None = None
         self.step_index = 0
@@ -136,6 +140,7 @@ class PostBuildTests:
             self.require("page.open home"),
             self.wait_for("home.state", contains=["core=true", "coreHost=process", "serviceMode=NotInstalled", "restarting=false"]),
         ))
+        self.step("Verify user data directory layout", self.verify_data_layout)
         self.step("Core status API", lambda: self.require("core.state", contains=['"state"']))
         self.step("Refresh home runtime metrics", lambda: self.require("home.refresh runtime", contains=["core=true", "uptime=", "connections="]))
         self.step("Refresh home network state", lambda: self.require("home.refresh network", contains=["network="]))
@@ -248,9 +253,60 @@ class PostBuildTests:
     def ensure_process_core_host(self) -> None:
         self.uninstall_service_mode()
 
+    def resolve_app_data_dir(self) -> Path:
+        if self.os_family == "windows":
+            return self.app_output / DATA_DIRECTORY
+        # 与 AppDataDirectoryResolver 一致：Debug 构建的应用目录带 _dev 后缀，末级固定为 data。
+        if self.os_family == "macos":
+            root = Path.home() / "Library" / "Application Support"
+        else:
+            configured = self.env.get("XDG_DATA_HOME", "")
+            root = Path(configured) if os.path.isabs(configured) else Path.home() / ".local" / "share"
+        return root / f"{self.app_exec.stem}_dev" / DATA_DIRECTORY
+
+    def verify_data_layout(self) -> None:
+        core_dir = self.app_data_dir / "core"
+        required = [
+            self.app_data_dir / "settings.json",
+            self.app_data_dir / "applogs" / "tray-running.logs",
+            core_dir / self.core_binary_name,
+            *(core_dir / name for name in sorted(CORE_ASSET_NAMES)),
+        ]
+        missing = [str(path) for path in required if not path.is_file()]
+        if missing:
+            raise PostBuildTestError(f"User data layout is incomplete: {missing}")
+
+        print(f"       appData => {self.app_data_dir}", flush=True)
+        if self.os_family == "windows":
+            return
+
+        if not os.access(core_dir / self.core_binary_name, os.X_OK):
+            raise PostBuildTestError(f"Deployed core is not executable: {core_dir / self.core_binary_name}")
+
+        writes = self.install_payload_writes()
+        if writes:
+            raise PostBuildTestError(f"Runtime wrote into the install payload: {writes}")
+
+    def install_payload_writes(self) -> list[str]:
+        # macOS/Linux 安装载体只读：data 下只允许构建产出的依赖、核心资源与服务更新包。
+        shipped_core = {self.core_binary_name, *CORE_ASSET_NAMES}
+        writes: list[str] = []
+        for path in (self.app_output / DATA_DIRECTORY).rglob("*"):
+            relative = path.relative_to(self.app_output)
+            if not path.is_file() or relative.is_relative_to(DEPS_DIRECTORY) or relative.is_relative_to(SERVICE_UPDATE_DIRECTORY):
+                continue
+            if relative.parent == CORE_DIRECTORY and relative.name in shipped_core:
+                continue
+            writes.append(relative.as_posix())
+        return writes
+
     def install_service_mode(self) -> None:
         self.service_touched = True
         self.require("service.install", contains=["result=Succeeded", "requiresRestart=false", "state=Running"])
+        suffix = ".exe" if self.os_family == "windows" else ""
+        host = self.app_data_dir / "service" / f"{self.app_exec.stem}_service_host_dev{suffix}"
+        if not host.is_file():
+            raise PostBuildTestError(f"Installed service host is missing from user data: {host}")
 
     def uninstall_service_mode(self) -> None:
         self.require("service.uninstall", contains=["result=Succeeded", "requiresRestart=false", "state=NotInstalled"])

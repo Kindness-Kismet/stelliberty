@@ -12,15 +12,16 @@ internal static class TrayApplicationLayout
         InstallDataDirectory,
         PathConventions.DepsSubdirectory);
 
-    public static string AppDataDirectory => OperatingSystem.IsMacOS()
-        ? PortableDataDirectoryResolver.ResolveMacOS(BaseDirectory)
-        : OperatingSystem.IsLinux()
-            ? PortableDataDirectoryResolver.ResolveLinux(
-                BaseDirectory,
-                Environment.GetEnvironmentVariable(PathConventions.PortableDataDirectoryEnvironmentVariable))
-            : InstallDataDirectory;
+    public static string AppDataDirectory => AppDataDirectoryResolver.Resolve(
+        BaseDirectory,
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        isPortable: OperatingSystem.IsWindows());
 
-    public static string CoreDirectory => Path.Combine(InstallDataDirectory, PathConventions.CoreSubdirectory);
+    // 安装载体随包分发的核心与 Geo 资源，只读。
+    public static string InstallCoreDirectory => Path.Combine(InstallDataDirectory, PathConventions.CoreSubdirectory);
+
+    // mihomo 工作目录与实际运行的核心；Windows 便携安装时与 InstallCoreDirectory 重合。
+    public static string CoreDirectory => Path.Combine(AppDataDirectory, PathConventions.CoreSubdirectory);
 
     public static string CoreBinaryPath => Path.Combine(
         CoreDirectory,
