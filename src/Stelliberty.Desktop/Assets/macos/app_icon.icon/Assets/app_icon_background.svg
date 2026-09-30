@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,-1137,-1178.57)">
+        <g id="icon_stelliberty_background" transform="matrix(1.06667,0,0,1.06667,1137,-1381.43)">
+            <g id="IC_STB">
+                <rect id="icon_stelliberty_background1" serif:id="icon_stelliberty_background" x="0" y="2400" width="960" height="960" style="fill:none;"/>
+                <clipPath id="_clip1">
+                    <rect id="icon_stelliberty_background2" serif:id="icon_stelliberty_background" x="0" y="2400" width="960" height="960"/>
+                </clipPath>
+                <g clip-path="url(#_clip1)">
+                    <g transform="matrix(2.06897,0,0,2.06897,-49.6552,2350.34)">
+                        <rect x="24" y="24" width="464" height="464" style="fill:url(#_Linear2);"/>
+                    </g>
+                    <g transform="matrix(0.9375,0,0,0.9375,-2.27374e-13,2400)">
+                        <path d="M0,875.692C82.457,767.942 126.578,734.02 198.629,696.942C388.925,599.017 507.799,697.153 748.629,589.692C807.02,563.638 1002.09,452.417 1024,344.942L1024,1024L0,1024L0,875.692Z" style="fill:rgb(57,141,249);"/>
+                    </g>
+                    <g transform="matrix(0.9375,0,0,0.9375,-2.27374e-13,2400)">
+                        <path d="M262.796,1024C262.796,1024 278.501,937.301 335.213,880.933C484.629,732.422 691.688,757.606 799.046,704.933C898.279,656.247 1004.43,571.543 1024,510.5L1024,1024L262.796,1024" style="fill:rgb(0,160,255);"/>
+                    </g>
+                </g>
+            </g>
+        </g>
+        <g id="IC_TRAY_SB">
+        </g>
+        <g id="IC_TRAY_STB">
+        </g>
+    </g>
+    <defs>
+        <linearGradient id="_Linear2" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(324.8,454.72,-454.72,324.8,107.52,33.28)"><stop offset="0" style="stop-color:rgb(74,148,232);stop-opacity:1"/><stop offset="0.38" style="stop-color:rgb(36,107,206);stop-opacity:1"/><stop offset="0.72" style="stop-color:rgb(26,88,184);stop-opacity:1"/><stop offset="1" style="stop-color:rgb(22,63,146);stop-opacity:1"/></linearGradient>
+    </defs>
+</svg>

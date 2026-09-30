@@ -809,25 +809,24 @@ def copy_linux_icon(target_path: Path, configuration: str) -> None:
 
 
 def build_macos_icns(output_path: Path, configuration: str) -> None:
-    icon_prefix = "app_icon"
     icon_sources = {
-        "icon_16x16.png": "app_icon_16.png",
-        "icon_16x16@2x.png": "app_icon_32.png",
-        "icon_32x32.png": "app_icon_32.png",
-        "icon_32x32@2x.png": "app_icon_64.png",
-        "icon_128x128.png": "app_icon_128.png",
-        "icon_128x128@2x.png": "app_icon_256.png",
-        "icon_256x256.png": "app_icon_256.png",
-        "icon_256x256@2x.png": "app_icon_512.png",
-        "icon_512x512.png": "app_icon_512.png",
-        "icon_512x512@2x.png": "app_icon_1024.png",
+        "icon_16x16.png": "app_icon-macOS-Default-16x16@1x.png",
+        "icon_16x16@2x.png": "app_icon-macOS-Default-16x16@2x.png",
+        "icon_32x32.png": "app_icon-macOS-Default-32x32@1x.png",
+        "icon_32x32@2x.png": "app_icon-macOS-Default-32x32@2x.png",
+        "icon_128x128.png": "app_icon-macOS-Default-128x128@1x.png",
+        "icon_128x128@2x.png": "app_icon-macOS-Default-128x128@2x.png",
+        "icon_256x256.png": "app_icon-macOS-Default-256x256@1x.png",
+        "icon_256x256@2x.png": "app_icon-macOS-Default-256x256@2x.png",
+        "icon_512x512.png": "app_icon-macOS-Default-512x512@1x.png",
+        "icon_512x512@2x.png": "app_icon-macOS-Default-1024x1024@1x.png",
     }
     source_dir = ROOT / "src" / "Stelliberty.Desktop" / "Assets" / "macos"
     with tempfile.TemporaryDirectory(prefix="app-iconset-") as temp_dir:
         iconset_dir = Path(temp_dir) / "AppIcon.iconset"
         iconset_dir.mkdir(parents=True, exist_ok=True)
         for target_name, source_name in icon_sources.items():
-            source_path = source_dir / source_name.replace("app_icon", icon_prefix)
+            source_path = source_dir / source_name
             if not source_path.exists():
                 raise FileNotFoundError(f"macOS icon does not exist: {source_path}")
             shutil.copy2(source_path, iconset_dir / target_name)
