@@ -413,11 +413,6 @@ public sealed partial class App : Avalonia.Application
             return;
         }
 
-        RequestDockReopen();
-    }
-
-    internal void RequestDockReopen()
-    {
         Dispatcher.UIThread.Post(() =>
         {
             if (_mainWindow is { IsShutdownPreparing: false })

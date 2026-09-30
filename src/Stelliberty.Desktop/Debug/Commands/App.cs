@@ -80,10 +80,13 @@ internal static partial class DebugCommands
 
         if (string.Equals(command, "window.reopen", StringComparison.OrdinalIgnoreCase))
         {
-            var app = Avalonia.Application.Current as App
-                ?? throw new InvalidOperationException("Desktop application is not available");
-            app.RequestDockReopen();
-            return null;
+            if (!OperatingSystem.IsMacOS())
+            {
+                throw new PlatformNotSupportedException("Dock reopen is only available on macOS");
+            }
+
+            MacOSApplicationDebugActions.Reopen(window.IsVisible && window.WindowState != WindowState.Minimized);
+            return "source=macos-application-delegate";
         }
 
         if (string.Equals(command, "window.minimize", StringComparison.OrdinalIgnoreCase))

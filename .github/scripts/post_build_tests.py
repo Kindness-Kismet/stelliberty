@@ -272,7 +272,7 @@ class PostBuildTests:
                 ("Dark", "#A0000000", "#FF242424", "#44000000"),
             ):
                 self.require(f"settings.theme.set {selected_theme}", contains=[f"theme={selected_theme}"])
-                self.require("window.reopen")
+                self.require("window.reopen", contains=["source=macos-application-delegate"])
                 self.wait_for("window.appearance", contains=[
                     "active=true", "visible=true", f"theme={selected_theme}", "windowEffect=Blur",
                     f"root={active_root}", f"surface={card}", f"card={card}", f"settingsGroup={card}",
@@ -283,7 +283,7 @@ class PostBuildTests:
                 ], timeout=15, interval=0.1)
                 if not self.is_app_running():
                     raise PostBuildTestError("Closing to the tray unexpectedly stopped the app")
-                self.require("window.reopen")
+                self.require("window.reopen", contains=["source=macos-application-delegate"])
                 self.wait_for("window.appearance", contains=[
                     "active=true", "visible=true", f"root={active_root}",
                 ], timeout=15, interval=0.1)
@@ -292,7 +292,7 @@ class PostBuildTests:
 
             self.require("window.minimize")
             self.wait_for("window.state", contains=["state=Minimized"], timeout=15, interval=0.1)
-            self.require("window.reopen")
+            self.require("window.reopen", contains=["source=macos-application-delegate"])
             self.wait_for("window.state", contains=["visible=true", "state=Normal"], timeout=15, interval=0.1)
             if self.tray_command("state")["UiPid"] != ui_pid:
                 raise PostBuildTestError("Dock reopen did not reuse the minimized UI process")
