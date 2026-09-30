@@ -311,11 +311,19 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_DISPLAY_NAME: ${{ needs.prepare.outputs.app_display_name }}
+          APP_VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET_PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
 
           python scripts/prebuild.py --platform ${{ matrix.platform }}
-          python scripts/build.py --platform ${{ matrix.platform }} --version ${{ needs.prepare.outputs.version }} --pack installer
+          python scripts/build.py --platform ${{ matrix.platform }} --version ${{ needs.prepare.outputs.version }} --pack all
+          # 先归档应用包，保留可执行权限并排除资源分叉、扩展属性与隔离标记。
+          ditto -c -k --keepParent --norsrc --noextattr --noqtn \
+            "build/packages/${APP_DISPLAY_NAME}.app" \
+            "build/packages/stelliberty-v${APP_VERSION}-${TARGET_PLATFORM}.app.zip"
+          unzip -tq "build/packages/stelliberty-v${APP_VERSION}-${TARGET_PLATFORM}.app.zip"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
@@ -324,6 +332,8 @@ jobs:
           path: |
             build/*.zip
             build/packages/*
+            !build/*-macos-*.zip
+            !build/packages/*.app/**
           if-no-files-found: warn
 
   release:
