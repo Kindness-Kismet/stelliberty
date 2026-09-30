@@ -45,10 +45,19 @@ internal static class Program
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(avaloniaArguments);
     }
 
-    private static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<TrayApplication>()
+    private static AppBuilder BuildAvaloniaApp()
+    {
+        var builder = AppBuilder.Configure<TrayApplication>()
             .UsePlatformDetect()
             .LogToTrace();
+
+        if (OperatingSystem.IsMacOS())
+        {
+            builder = builder.With(new MacOSPlatformOptions { ShowInDock = false });
+        }
+
+        return builder;
+    }
 
     private static async Task<int> ActivateExistingInstanceAsync()
     {
