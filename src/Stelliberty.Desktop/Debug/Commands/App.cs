@@ -18,6 +18,9 @@ internal static partial class DebugCommands
             || string.Equals(command, "app.memory", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.quit", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.state", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.minimize", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.maximize", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.restore", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.close", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.show", StringComparison.OrdinalIgnoreCase)
             || command.StartsWith("window.move ", StringComparison.OrdinalIgnoreCase)
@@ -56,6 +59,30 @@ internal static partial class DebugCommands
 
         if (string.Equals(command, "window.state", StringComparison.OrdinalIgnoreCase))
         {
+            return WindowStateText(window);
+        }
+
+        if (string.Equals(command, "window.minimize", StringComparison.OrdinalIgnoreCase))
+        {
+            window.WindowState = WindowState.Minimized;
+            return WindowStateText(window);
+        }
+
+        if (string.Equals(command, "window.maximize", StringComparison.OrdinalIgnoreCase))
+        {
+            window.WindowState = WindowState.Maximized;
+            return WindowStateText(window);
+        }
+
+        if (string.Equals(command, "window.restore", StringComparison.OrdinalIgnoreCase))
+        {
+            window.WindowState = WindowState.Normal;
+            // Windows 会先恢复最小化前的最大化状态，需同步原生状态后再还原。
+            if (OperatingSystem.IsWindows() && window.WindowState == WindowState.Maximized)
+            {
+                window.WindowState = WindowState.Maximized;
+                window.WindowState = WindowState.Normal;
+            }
             return WindowStateText(window);
         }
 
