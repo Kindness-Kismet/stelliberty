@@ -829,7 +829,11 @@ public sealed partial class MainWindow : Window
         if (!_isShutdownRequested)
         {
             args.Cancel = true;
-            if (DataContext is MainWindowViewModel { AppBehavior.IsMinimizeToTrayEnabled: true }
+            if (OperatingSystem.IsMacOS() && args.CloseReason == WindowCloseReason.ApplicationShutdown)
+            {
+                RequestShutdown();
+            }
+            else if (DataContext is MainWindowViewModel { AppBehavior.IsMinimizeToTrayEnabled: true }
                 && CanExitToBackground)
             {
                 HideToBackground();

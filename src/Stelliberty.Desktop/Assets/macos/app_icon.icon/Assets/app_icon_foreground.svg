@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,-1137,-23.5714)">
+        <g id="icon_stelliberty_foreground" transform="matrix(1.06667,0,0,1.06667,1137,-2536.43)">
+            <g id="IC_STB">
+                <rect id="icon_stelliberty_foreground1" serif:id="icon_stelliberty_foreground" x="0" y="2400" width="960" height="960" style="fill:none;"/>
+                <g id="icon_stelliberty_foreground2" serif:id="icon_stelliberty_foreground">
+                    <g id="planet-large" transform="matrix(1.97198,0,0,1.97198,-24.8276,2402.63)">
+                        <path d="M207.26,266.03C206.418,261.061 205.994,256.029 205.994,250.989C205.994,201.616 246.622,160.989 295.994,160.989C345.367,160.989 385.994,201.616 385.994,250.989C385.994,300.361 345.367,340.989 295.994,340.989C275.204,340.989 255.043,333.785 238.96,320.61C238.162,298.288 226.253,277.784 207.26,266.03Z" style="fill:white;fill-rule:nonzero;"/>
+                    </g>
+                    <g id="planet-medium" transform="matrix(1.97198,0,0,1.97198,-24.8276,2402.63)">
+                        <circle cx="172" cy="323" r="54" style="fill:white;"/>
+                    </g>
+                    <g id="planet-small" transform="matrix(1.97198,0,0,1.97198,-24.8276,2402.63)">
+                        <circle cx="398" cy="136" r="13" style="fill:white;"/>
+                    </g>
+                    <g id="planet-tiny" transform="matrix(1.97198,0,0,1.97198,-24.8276,2402.63)">
+                        <circle cx="108" cy="231" r="10" style="fill:white;"/>
+                    </g>
+                    <g id="sparkle" transform="matrix(1.97198,0,0,1.97198,284.774,2668.85)">
+                        <path d="M0,-36C8,-20 20,-8 36,0C20,8 8,20 0,36C-8,20 -20,8 -36,0C-20,-8 -8,-20 0,-36Z" style="fill:white;fill-rule:nonzero;"/>
+                    </g>
+                </g>
+            </g>
+        </g>
+        <g id="IC_TRAY_SB">
+        </g>
+        <g id="IC_TRAY_STB">
+        </g>
+    </g>
+</svg>

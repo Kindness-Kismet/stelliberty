@@ -6,7 +6,7 @@ from pathlib import Path
 
 from build_support.commands import run
 from build_support.fonts import ensure_app_fonts
-from build_support.installer import pack_installers
+from build_support.installer import pack_installers, pack_macos_app
 from build_support.layout import organize_dependency_directory, output_name, service_binary_name, zip_output
 from build_support.models import AppMetadata, BuildRequest, PlatformTarget
 from build_support.paths import BUILD_DIR, CORE_DIRECTORY, DESKTOP_PROJECT, PRE_ASSETS_DIR, ROOT, RUST_WORKSPACE, SERVICE_UPDATE_DIRECTORY, TRAY_PROJECT
@@ -38,6 +38,9 @@ def reset_build_servers() -> None:
     )
 
 def build_output(metadata: AppMetadata, platform_name: str, configuration: str, target: PlatformTarget, pack_format: str | None, clean: bool) -> None:
+    if pack_format == "app" and not platform_name.startswith("macos"):
+        raise RuntimeError("--pack app is only supported for macOS targets")
+
     output_dir = BUILD_DIR / output_name(metadata, platform_name, configuration)
     build_label = f"{platform_name} {display_configuration(configuration)}"
 
@@ -62,6 +65,11 @@ def build_output(metadata: AppMetadata, platform_name: str, configuration: str, 
 
     with timed_step(f"Organize dependency directory {build_label}"):
         organize_dependency_directory(output_dir, metadata, configuration)
+
+    if pack_format in ("app", "all") and platform_name.startswith("macos"):
+        with timed_step(f"Package app {build_label}"):
+            app_path = pack_macos_app(metadata, platform_name, configuration, target, output_dir)
+            print(f"  Artifact {app_path}", flush=True)
 
     if pack_format in ("zip", "all"):
         with timed_step(f"Package zip {build_label}"):
