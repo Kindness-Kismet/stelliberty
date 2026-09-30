@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 
 namespace Stelliberty.Desktop.Debug;
@@ -17,9 +19,13 @@ internal static partial class DebugCommands
             || string.Equals(command, "toast.state", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.memory", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.quit", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "app.request-quit", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.state", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.appearance", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.close", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.show", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.reopen", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.minimize", StringComparison.OrdinalIgnoreCase)
             || command.StartsWith("window.move ", StringComparison.OrdinalIgnoreCase)
             || command.StartsWith("window.resize ", StringComparison.OrdinalIgnoreCase);
     }
@@ -54,9 +60,39 @@ internal static partial class DebugCommands
             return null;
         }
 
+        if (string.Equals(command, "app.request-quit", StringComparison.OrdinalIgnoreCase))
+        {
+            var desktop = Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime
+                ?? throw new InvalidOperationException("Desktop application lifetime is not available");
+            desktop.TryShutdown();
+            return null;
+        }
+
         if (string.Equals(command, "window.state", StringComparison.OrdinalIgnoreCase))
         {
             return WindowStateText(window);
+        }
+
+        if (string.Equals(command, "window.appearance", StringComparison.OrdinalIgnoreCase))
+        {
+            return WindowAppearanceStateText(window);
+        }
+
+        if (string.Equals(command, "window.reopen", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!OperatingSystem.IsMacOS())
+            {
+                throw new PlatformNotSupportedException("Dock reopen is only available on macOS");
+            }
+
+            MacOSApplicationDebugActions.Reopen(window.IsVisible && window.WindowState != WindowState.Minimized);
+            return "source=macos-application-delegate";
+        }
+
+        if (string.Equals(command, "window.minimize", StringComparison.OrdinalIgnoreCase))
+        {
+            window.WindowState = WindowState.Minimized;
+            return null;
         }
 
         if (command.StartsWith("window.move ", StringComparison.OrdinalIgnoreCase))
@@ -110,6 +146,32 @@ internal static partial class DebugCommands
             $"screenY={workingArea?.Y.ToString(CultureInfo.InvariantCulture) ?? string.Empty}",
             $"screenWidth={workingArea?.Width.ToString(CultureInfo.InvariantCulture) ?? string.Empty}",
             $"screenHeight={workingArea?.Height.ToString(CultureInfo.InvariantCulture) ?? string.Empty}");
+    }
+
+    private static string WindowAppearanceStateText(MainWindow window)
+    {
+        var viewModel = RequireViewModel(window);
+        return string.Join(
+            ';',
+            $"active={Bool(window.IsActive)}",
+            $"visible={Bool(window.IsVisible)}",
+            $"theme={window.ActualThemeVariant}",
+            $"windowEffect={viewModel.Theme.SelectedWindowEffect}",
+            $"root={BrushColorText(window.Background)}",
+            $"surface={BrushColorText(window.FindResource("AppSurfaceBrush"))}",
+            $"card={BrushColorText(window.FindResource("AppCardBrush"))}",
+            $"settingsGroup={BrushColorText(window.FindResource("AppSettingsGroupBrush"))}");
+    }
+
+    private static string BrushColorText(object? brush)
+    {
+        if (brush is not ISolidColorBrush solidBrush)
+        {
+            throw new InvalidOperationException("Window appearance resource is not a solid color brush");
+        }
+
+        var color = solidBrush.Color;
+        return $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 
     private static string MemoryStateText(MainWindow window)

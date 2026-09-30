@@ -34,6 +34,7 @@ BUILD_PLATFORM_HELP = format_choice_help(
 PACK_HELP = format_choice_help(
     "Package format.",
     [
+        ("app", "Create a retained macOS app bundle"),
         ("zip", "Create a zip archive"),
         ("installer", "Create a platform installer"),
         ("all", "Create every package format"),
@@ -93,7 +94,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--pack",
-        choices=["zip", "installer", "all"],
+        choices=["app", "zip", "installer", "all"],
         metavar="FORMAT",
         default=None,
         help=PACK_HELP,

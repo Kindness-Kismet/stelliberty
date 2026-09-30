@@ -164,6 +164,49 @@ def pack_macos_installers(
         ]
 
 
+def pack_macos_app(
+    metadata: AppMetadata,
+    platform_name: str,
+    configuration: str,
+    target: PlatformTarget,
+    output_dir: Path,
+) -> Path:
+    if sys.platform != "darwin":
+        raise RuntimeError("macOS app bundles can only be created on a macOS host")
+
+    if not platform_name.startswith("macos"):
+        raise RuntimeError(f"macOS app bundles do not support this platform: {platform_name}")
+
+    ensure_command("iconutil", "Missing iconutil; cannot create the macOS icon")
+    PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
+    app_path = PACKAGES_DIR / f"{display_name(metadata, configuration)}.app"
+
+    with tempfile.TemporaryDirectory(prefix="macos-app-", dir=PACKAGES_DIR) as temp_dir:
+        staged_app = build_macos_app_bundle(metadata, platform_name, configuration, target, output_dir, Path(temp_dir))
+        backup_dir = None
+        backup_path = None
+        if app_path.exists() or app_path.is_symlink():
+            backup_dir = Path(tempfile.mkdtemp(prefix=".macos-app-backup-", dir=PACKAGES_DIR))
+            backup_path = backup_dir / app_path.name
+            try:
+                app_path.rename(backup_path)
+            except BaseException:
+                backup_dir.rmdir()
+                raise
+
+        try:
+            staged_app.rename(app_path)
+        except BaseException:
+            if backup_path is not None:
+                backup_path.rename(app_path)
+                backup_dir.rmdir()
+            raise
+
+        if backup_dir is not None:
+            shutil.rmtree(backup_dir)
+    return app_path
+
+
 def build_macos_app_bundle(
     metadata: AppMetadata,
     platform_name: str,
@@ -185,6 +228,13 @@ def build_macos_app_bundle(
         raise FileNotFoundError(f"macOS executable does not exist: {executable_path}")
 
     set_macos_payload_permissions(macos_dir, metadata, target)
+    ui_executable_path = macos_dir / DEPS_DIRECTORY / f"{metadata.app_name}_ui"
+    require_file(ui_executable_path)
+    named_ui_executable_path = ui_executable_path.with_name(metadata.display_name)
+    if named_ui_executable_path.exists():
+        raise FileExistsError(f"macOS UI executable destination already exists: {named_ui_executable_path}")
+    # 只改 apphost 文件名；它仍加载原有的 UI 程序集和依赖配置。
+    ui_executable_path.rename(named_ui_executable_path)
     write_macos_info_plist(metadata, configuration, platform_name, contents_dir / "Info.plist")
     build_macos_icns(resources_dir / "AppIcon.icns", configuration)
     return app_path
@@ -759,25 +809,24 @@ def copy_linux_icon(target_path: Path, configuration: str) -> None:
 
 
 def build_macos_icns(output_path: Path, configuration: str) -> None:
-    icon_prefix = "app_icon"
     icon_sources = {
-        "icon_16x16.png": "app_icon_16.png",
-        "icon_16x16@2x.png": "app_icon_32.png",
-        "icon_32x32.png": "app_icon_32.png",
-        "icon_32x32@2x.png": "app_icon_64.png",
-        "icon_128x128.png": "app_icon_128.png",
-        "icon_128x128@2x.png": "app_icon_256.png",
-        "icon_256x256.png": "app_icon_256.png",
-        "icon_256x256@2x.png": "app_icon_512.png",
-        "icon_512x512.png": "app_icon_512.png",
-        "icon_512x512@2x.png": "app_icon_1024.png",
+        "icon_16x16.png": "app_icon-macOS-Default-16x16@1x.png",
+        "icon_16x16@2x.png": "app_icon-macOS-Default-16x16@2x.png",
+        "icon_32x32.png": "app_icon-macOS-Default-32x32@1x.png",
+        "icon_32x32@2x.png": "app_icon-macOS-Default-32x32@2x.png",
+        "icon_128x128.png": "app_icon-macOS-Default-128x128@1x.png",
+        "icon_128x128@2x.png": "app_icon-macOS-Default-128x128@2x.png",
+        "icon_256x256.png": "app_icon-macOS-Default-256x256@1x.png",
+        "icon_256x256@2x.png": "app_icon-macOS-Default-256x256@2x.png",
+        "icon_512x512.png": "app_icon-macOS-Default-512x512@1x.png",
+        "icon_512x512@2x.png": "app_icon-macOS-Default-1024x1024@1x.png",
     }
     source_dir = ROOT / "src" / "Stelliberty.Desktop" / "Assets" / "macos"
     with tempfile.TemporaryDirectory(prefix="app-iconset-") as temp_dir:
         iconset_dir = Path(temp_dir) / "AppIcon.iconset"
         iconset_dir.mkdir(parents=True, exist_ok=True)
         for target_name, source_name in icon_sources.items():
-            source_path = source_dir / source_name.replace("app_icon", icon_prefix)
+            source_path = source_dir / source_name
             if not source_path.exists():
                 raise FileNotFoundError(f"macOS icon does not exist: {source_path}")
             shutil.copy2(source_path, iconset_dir / target_name)

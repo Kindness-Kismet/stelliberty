@@ -40,6 +40,19 @@ internal static class AppRuntime
 
         builder = builder.LogToTrace();
 
+        if (OperatingSystem.IsMacOS())
+        {
+            builder = builder.With(new MacOSPlatformOptions { ShowInDock = true });
+        }
+        builder = builder.AfterSetup(_ =>
+        {
+            // 平台前提放在延迟回调内，确保原生调用边界可被静态分析验证。
+            if (OperatingSystem.IsMacOS())
+            {
+                MacDockIconService.SetPackagedIcon();
+            }
+        });
+
         if (OperatingSystem.IsLinux())
         {
 #pragma warning disable AVALONIA_X11_CSD

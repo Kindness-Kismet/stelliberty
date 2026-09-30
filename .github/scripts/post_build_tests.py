@@ -248,7 +248,68 @@ class PostBuildTests:
             self.require("clash.list keys", contains=["network.unified-delay", "core-log.level"]),
             self.require("clash.state", contains=["areas=", "apply=", "error="]),
         ))
+        if self.os_family == "macos":
+            self.step("Verify macOS Dock lifecycle and window appearance", self.verify_macos_window_lifecycle)
         self.step("Close app and verify exit", self.stop_app_step)
+
+    def verify_macos_window_lifecycle(self) -> None:
+        behavior = self.require("settings.app-behavior.state")
+        original_minimize_to_tray = self.state_value(behavior, "minimizeToTray")
+        original_lightweight_mode = self.state_value(behavior, "lightweightMode")
+        theme = self.require("settings.theme.state")
+        original_theme = self.state_value(theme, "theme")
+        original_effect = self.state_value(theme, "windowEffect")
+        ui_pid = self.tray_command("state")["UiPid"]
+        if ui_pid is None:
+            raise PostBuildTestError("macOS Dock tests require a registered UI process")
+
+        try:
+            self.require("settings.app-behavior.set minimize-to-tray true", contains=["minimizeToTray=true"])
+            self.require("settings.app-behavior.set lightweight-mode false", contains=["lightweightMode=false"])
+            self.require("settings.window-effect.set blur", contains=["windowEffect=Blur"])
+            for selected_theme, active_root, inactive_root, card in (
+                ("Light", "#A0FFFFFF", "#FFEEEEEE", "#CCFFFFFF"),
+                ("Dark", "#A0000000", "#FF242424", "#44000000"),
+            ):
+                self.require(f"settings.theme.set {selected_theme}", contains=[f"theme={selected_theme}"])
+                self.require("window.reopen", contains=["source=macos-application-delegate"])
+                self.wait_for("window.appearance", contains=[
+                    "active=true", "visible=true", f"theme={selected_theme}", "windowEffect=Blur",
+                    f"root={active_root}", f"surface={card}", f"card={card}", f"settingsGroup={card}",
+                ], timeout=15, interval=0.1)
+                self.require("window.close")
+                self.wait_for("window.appearance", contains=[
+                    "active=false", "visible=false", f"theme={selected_theme}", f"root={inactive_root}",
+                ], timeout=15, interval=0.1)
+                if not self.is_app_running():
+                    raise PostBuildTestError("Closing to the tray unexpectedly stopped the app")
+                self.require("window.reopen", contains=["source=macos-application-delegate"])
+                self.wait_for("window.appearance", contains=[
+                    "active=true", "visible=true", f"root={active_root}",
+                ], timeout=15, interval=0.1)
+                if self.tray_command("state")["UiPid"] != ui_pid:
+                    raise PostBuildTestError("Dock reopen did not reuse the hidden UI process")
+
+            self.require("window.minimize")
+            self.wait_for("window.state", contains=["state=Minimized"], timeout=15, interval=0.1)
+            self.require("window.reopen", contains=["source=macos-application-delegate"])
+            self.wait_for("window.state", contains=["visible=true", "state=Normal"], timeout=15, interval=0.1)
+            if self.tray_command("state")["UiPid"] != ui_pid:
+                raise PostBuildTestError("Dock reopen did not reuse the minimized UI process")
+
+            self.require("window.close")
+            self.wait_for("window.state", contains=["visible=false"], timeout=15, interval=0.1)
+            self.command("app.request-quit", allow_disconnect=True)
+            self.wait_for_app_exit(timeout=15)
+            if self.is_app_running() or self.try_probe_port():
+                raise PostBuildTestError("Application quit did not stop both the tray and UI while hidden")
+        finally:
+            if not self.is_app_running():
+                self.start_app()
+            self.require(f"settings.theme.set {original_theme}")
+            self.require(f"settings.window-effect.set {original_effect}")
+            self.require(f"settings.app-behavior.set minimize-to-tray {original_minimize_to_tray}")
+            self.require(f"settings.app-behavior.set lightweight-mode {original_lightweight_mode}")
 
     def ensure_process_core_host(self) -> None:
         self.uninstall_service_mode()

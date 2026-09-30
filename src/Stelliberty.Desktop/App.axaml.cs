@@ -45,6 +45,7 @@ public sealed partial class App : Avalonia.Application
 {
     private DesktopTraySession? _traySession;
     private MainWindow? _mainWindow;
+    private IActivatableLifetime? _macOSActivatableLifetime;
     private long _backgroundRevision = -1;
     private long _subscriptionRevision;
     private long _providerRevision;
@@ -323,9 +324,26 @@ public sealed partial class App : Avalonia.Application
                 await UnregisterTraySessionAsync();
             };
             desktop.MainWindow = mainWindow;
+            if (OperatingSystem.IsMacOS())
+            {
+                if (_macOSActivatableLifetime is not null)
+                {
+                    _macOSActivatableLifetime.Activated -= OnMacOSApplicationActivated;
+                }
+                _macOSActivatableLifetime = this.TryGetFeature<IActivatableLifetime>();
+                if (_macOSActivatableLifetime is not null)
+                {
+                    _macOSActivatableLifetime.Activated += OnMacOSApplicationActivated;
+                }
+            }
             desktop.Exit += (_, _) =>
             {
                 StopBackgroundServices();
+                if (_macOSActivatableLifetime is not null)
+                {
+                    _macOSActivatableLifetime.Activated -= OnMacOSApplicationActivated;
+                    _macOSActivatableLifetime = null;
+                }
                 if (_traySession is not null)
                 {
                     _traySession.ActivationRequested -= OnTrayActivationRequested;
@@ -387,6 +405,22 @@ public sealed partial class App : Avalonia.Application
 
     private void OnTrayActivationRequested(object? sender, EventArgs args) =>
         Dispatcher.UIThread.Post(ShowMainWindow);
+
+    private void OnMacOSApplicationActivated(object? sender, ActivatedEventArgs args)
+    {
+        if (args.Kind != ActivationKind.Reopen)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_mainWindow is { IsShutdownPreparing: false })
+            {
+                ShowMainWindow();
+            }
+        });
+    }
 
     private void OnTrayToggleRequested(object? sender, EventArgs args) =>
         Dispatcher.UIThread.Post(ToggleMainWindow);
