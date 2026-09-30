@@ -180,12 +180,30 @@ def pack_macos_app(
     ensure_command("iconutil", "Missing iconutil; cannot create the macOS icon")
     PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
     app_path = PACKAGES_DIR / f"{display_name(metadata, configuration)}.app"
-    if app_path.exists() or app_path.is_symlink():
-        raise FileExistsError(f"macOS app bundle already exists: {app_path}")
 
     with tempfile.TemporaryDirectory(prefix="macos-app-", dir=PACKAGES_DIR) as temp_dir:
         staged_app = build_macos_app_bundle(metadata, platform_name, configuration, target, output_dir, Path(temp_dir))
-        staged_app.rename(app_path)
+        backup_dir = None
+        backup_path = None
+        if app_path.exists() or app_path.is_symlink():
+            backup_dir = Path(tempfile.mkdtemp(prefix=".macos-app-backup-", dir=PACKAGES_DIR))
+            backup_path = backup_dir / app_path.name
+            try:
+                app_path.rename(backup_path)
+            except BaseException:
+                backup_dir.rmdir()
+                raise
+
+        try:
+            staged_app.rename(app_path)
+        except BaseException:
+            if backup_path is not None:
+                backup_path.rename(app_path)
+                backup_dir.rmdir()
+            raise
+
+        if backup_dir is not None:
+            shutil.rmtree(backup_dir)
     return app_path
 
 
