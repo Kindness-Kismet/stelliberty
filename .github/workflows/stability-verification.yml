@@ -61,7 +61,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 11.0.x
+          dotnet-version: 11.0.100-rc.1.26425.128
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -163,18 +163,6 @@ jobs:
             executable="${executable}.exe"
           fi
           printf 'APP_EXEC=%s\nAPP_OUTPUT=%s\n' "${executable}" "${output}" >> "$GITHUB_ENV"
-
-      - name: Test installer data persistence
-        if: matrix.os_family == 'linux' || matrix.os_family == 'macos'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python .github/scripts/retry_command.py --attempts 3 -- \
-            python .github/scripts/post_build_installation_persistence_test.py \
-              --os-family ${{ matrix.os_family }} \
-              --app-output "$APP_OUTPUT"
-          echo "### Installer Data Persistence" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ matrix.label }} replacement test preserved the built payload and portable data." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Windows shortcut Post-build Tests
         if: matrix.os_family == 'windows'

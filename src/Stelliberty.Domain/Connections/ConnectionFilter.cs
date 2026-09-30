@@ -2,8 +2,6 @@ namespace Stelliberty.Domain.Connections;
 
 public sealed class ConnectionFilter
 {
-    private const string DirectProxy = "DIRECT";
-
     public IReadOnlyList<ConnectionInfo> Apply(
         IReadOnlyList<ConnectionInfo> connections,
         ConnectionFilterLevel level,
@@ -11,8 +9,8 @@ public sealed class ConnectionFilter
     {
         IEnumerable<ConnectionInfo> filtered = level switch
         {
-            ConnectionFilterLevel.Direct => connections.Where(connection => connection.ProxyNode == DirectProxy),
-            ConnectionFilterLevel.Proxy => connections.Where(connection => connection.ProxyNode != DirectProxy),
+            ConnectionFilterLevel.Direct => connections.Where(connection => connection.IsDirect),
+            ConnectionFilterLevel.Proxy => connections.Where(connection => !connection.IsDirect),
             _ => connections
         };
 

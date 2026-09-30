@@ -795,12 +795,6 @@ def set_macos_payload_permissions(install_dir: Path, metadata: AppMetadata, targ
         if path.exists():
             path.chmod(path.stat().st_mode | 0o755)
 
-    data_dir = install_dir / "data"
-    if data_dir.exists():
-        for path in [data_dir, *data_dir.rglob("*")]:
-            writable_mode = 0o777 if path.is_dir() else 0o666
-            path.chmod(path.stat().st_mode | writable_mode)
-
 
 def macos_bundle_identifier(metadata: AppMetadata, configuration: str = "release") -> str:
     suffix = ".dev" if configuration == "dev" else ""

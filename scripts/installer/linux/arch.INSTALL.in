@@ -2,9 +2,6 @@ post_install() {
     chmod 755 /opt/@APP_PACKAGE@/@APP_EXECUTABLE@ 2>/dev/null || true
     chmod 755 /opt/@APP_PACKAGE@/data/core/clash-mihomo-core 2>/dev/null || true
     chmod 755 /opt/@APP_PACKAGE@/data/service/update/@SERVICE_BINARY@ 2>/dev/null || true
-    chmod -R a+rwX /opt/@APP_PACKAGE@/data 2>/dev/null || true
-    mkdir -p /opt/@APP_PACKAGE@.data
-    chmod -R a+rwX /opt/@APP_PACKAGE@.data 2>/dev/null || true
 
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database /usr/share/applications || true

@@ -30,9 +30,6 @@ cp -a "@PACKAGE_ROOT@"/. %{buildroot}/
 chmod 755 /opt/@APP_PACKAGE@/@APP_EXECUTABLE@ || true
 chmod 755 /opt/@APP_PACKAGE@/data/core/clash-mihomo-core || true
 chmod 755 /opt/@APP_PACKAGE@/data/service/update/@SERVICE_BINARY@ || true
-chmod -R a+rwX /opt/@APP_PACKAGE@/data || true
-mkdir -p /opt/@APP_PACKAGE@.data
-chmod -R a+rwX /opt/@APP_PACKAGE@.data || true
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database /usr/share/applications || true
 fi

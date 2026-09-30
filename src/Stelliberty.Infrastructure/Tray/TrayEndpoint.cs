@@ -36,7 +36,7 @@ public static class TrayEndpoint
             }
 
             var localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return Path.Combine(localData, AppRuntimeNames.FileNameToken, "runtime");
+            return Path.Combine(localData, AppRuntimeNames.UserDirectoryName, "runtime");
         }
     }
 

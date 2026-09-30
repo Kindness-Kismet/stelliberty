@@ -66,6 +66,71 @@ public sealed class ChainProxyRuntimeTests
         Assert.Equal(["HK", "JP"], ProxyGroupEntries(output, "GLOBAL"));
     }
 
+    [Fact(DisplayName = "Runtime applier fills emptied proxy group with fallback outbound")]
+    public void RuntimeApplierFillsEmptiedProxyGroupWithFallbackOutbound()
+    {
+        var output = new SubscriptionChainProxyRuntimeApplier().Apply(
+            """
+            proxies:
+              - name: HK
+                type: ss
+                server: hk.example
+              - name: JP via HK
+                type: ss
+                server: jp.example
+                dialer-proxy: HK
+            proxy-groups:
+              - name: LANDING
+                type: select
+                proxies: [JP via HK]
+              - name: CUSTOM FALLBACK
+                type: select
+                empty-fallback: DIRECT
+                proxies: [JP via HK]
+            rules: []
+            """,
+            Subscription("sub-1") with
+            {
+                DisabledBuiltinChainProxyNames = ["JP via HK"]
+            });
+
+        Assert.Equal(["COMPATIBLE"], ProxyGroupEntries(output, "LANDING"));
+        Assert.Equal(["DIRECT"], ProxyGroupEntries(output, "CUSTOM FALLBACK"));
+    }
+
+    [Fact(DisplayName = "Runtime applier keeps core provided groups without fallback")]
+    public void RuntimeApplierKeepsCoreProvidedGroupsWithoutFallback()
+    {
+        var output = new SubscriptionChainProxyRuntimeApplier().Apply(
+            """
+            proxies:
+              - name: HK
+                type: ss
+                server: hk.example
+              - name: JP via HK
+                type: ss
+                server: jp.example
+                dialer-proxy: HK
+            proxy-groups:
+              - name: USE ONLY
+                type: select
+                use: [airport]
+                proxies: [JP via HK]
+              - name: INCLUDE ALL
+                type: select
+                include-all: true
+                proxies: [JP via HK]
+            rules: []
+            """,
+            Subscription("sub-1") with
+            {
+                DisabledBuiltinChainProxyNames = ["JP via HK"]
+            });
+
+        Assert.Empty(ProxyGroupEntries(output, "USE ONLY"));
+        Assert.Empty(ProxyGroupEntries(output, "INCLUDE ALL"));
+    }
+
     [Fact(DisplayName = "Runtime applier adds custom chain with internal hop")]
     public void RuntimeApplierAddsCustomChainWithInternalHop()
     {
@@ -258,7 +323,10 @@ public sealed class ChainProxyRuntimeTests
         var root = (YamlMappingNode)stream.Documents[0].RootNode;
         var groups = ((YamlSequenceNode)root.Children[new YamlScalarNode("proxy-groups")]).Children.OfType<YamlMappingNode>();
         var group = groups.Single(group => Scalar(group, "name") == groupName);
-        return ((YamlSequenceNode)group.Children[new YamlScalarNode("proxies")]).Children.Select(node => node.ToString()).ToList();
+        // 成员由核心补齐的组不写 proxies 键，视为空条目。
+        return group.Children.TryGetValue(new YamlScalarNode("proxies"), out var value) && value is YamlSequenceNode sequence
+            ? sequence.Children.Select(node => node.ToString()).ToList()
+            : [];
     }
 
     private static string Scalar(YamlMappingNode mapping, string key)

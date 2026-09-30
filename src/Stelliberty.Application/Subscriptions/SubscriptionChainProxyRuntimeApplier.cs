@@ -25,6 +25,9 @@ public sealed class SubscriptionChainProxyRuntimeApplier
         "COMPATIBLE"
     };
 
+    // 与 mihomo 的 empty-fallback 默认值一致，作为空代理组占位。
+    private const string DefaultEmptyFallback = "COMPATIBLE";
+
     public ChainProxyInspection Inspect(string content, Subscription subscription)
     {
         if (!TryLoad(content, out _, out _, out var proxies, out var proxyGroups))
@@ -270,26 +273,29 @@ public sealed class SubscriptionChainProxyRuntimeApplier
         foreach (var group in proxyGroups)
         {
             var clone = Clone(group);
-            if (clone.Children.TryGetValue(new YamlScalarNode("proxies"), out var proxiesNode)
-                && proxiesNode is YamlSequenceNode proxies)
+            var sourceEntries = clone.Children.TryGetValue(new YamlScalarNode("proxies"), out var proxiesNode)
+                && proxiesNode is YamlSequenceNode proxies
+                ? proxies
+                : new YamlSequenceNode();
+            var entries = BuildProxyGroupEntries(
+                Scalar(group, "name"),
+                sourceEntries,
+                disabledBuiltinNames,
+                customGroupEntries);
+            // 移除禁用链式节点可能清空代理组，mihomo 会以 `use` or `proxies` missing 拒绝整份配置。
+            if (entries.Children.Count == 0 && !HasCoreProvidedMembers(group))
             {
-                clone.Children[new YamlScalarNode("proxies")] = BuildProxyGroupEntries(
-                    Scalar(group, "name"),
-                    proxies,
-                    disabledBuiltinNames,
-                    customGroupEntries);
+                entries.Add(new YamlScalarNode(EmptyFallbackOutbound(group)));
+            }
+
+            if (entries.Children.Count > 0)
+            {
+                clone.Children[new YamlScalarNode("proxies")] = entries;
             }
             else
             {
-                var entries = BuildProxyGroupEntries(
-                    Scalar(group, "name"),
-                    new YamlSequenceNode(),
-                    disabledBuiltinNames,
-                    customGroupEntries);
-                if (entries.Children.Count > 0)
-                {
-                    clone.Children[new YamlScalarNode("proxies")] = entries;
-                }
+                // 成员全部被过滤时必须删除原键，否则克隆会保留过期条目。
+                clone.Children.Remove(new YamlScalarNode("proxies"));
             }
 
             groups.Add(clone);
@@ -326,6 +332,33 @@ public sealed class SubscriptionChainProxyRuntimeApplier
         }
 
         return new YamlSequenceNode(entries);
+    }
+
+    // use 与 include-all 系列由核心补齐成员，空 proxies 不触发拒绝。
+    private static bool HasCoreProvidedMembers(YamlMappingNode group)
+    {
+        return HasNonEmptySequence(group, "use")
+            || IsTrueScalar(group, "include-all")
+            || IsTrueScalar(group, "include-all-proxies")
+            || IsTrueScalar(group, "include-all-providers");
+    }
+
+    private static string EmptyFallbackOutbound(YamlMappingNode group)
+    {
+        var fallback = Scalar(group, "empty-fallback");
+        return string.IsNullOrWhiteSpace(fallback) ? DefaultEmptyFallback : fallback;
+    }
+
+    private static bool HasNonEmptySequence(YamlMappingNode mapping, string key)
+    {
+        return mapping.Children.TryGetValue(new YamlScalarNode(key), out var value)
+            && value is YamlSequenceNode sequence
+            && sequence.Children.Count > 0;
+    }
+
+    private static bool IsTrueScalar(YamlMappingNode mapping, string key)
+    {
+        return string.Equals(Scalar(mapping, key), "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsDisabledBuiltinProxy(YamlMappingNode proxy, IReadOnlySet<string> disabledNames)

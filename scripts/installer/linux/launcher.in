@@ -1,3 +1,2 @@
 #!/bin/sh
-export PORTABLE_APP_DATA_DIR="/opt/@APP_PACKAGE@.data"
 exec /opt/@APP_PACKAGE@/@APP_EXECUTABLE@ "$@"

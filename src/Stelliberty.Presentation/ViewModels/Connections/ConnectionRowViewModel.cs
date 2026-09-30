@@ -64,8 +64,6 @@ public sealed class ConnectionRowViewModel : ViewModelBase
 
     public string DurationText => FormatDuration(_connection.Start, _now ?? DateTimeOffset.Now);
 
-    public string ProxyNode => _connection.ProxyNode;
-
     public string Rule => _connection.Rule;
 
     public string Process => _connection.Metadata.Process;
@@ -76,7 +74,7 @@ public sealed class ConnectionRowViewModel : ViewModelBase
 
     public string TrafficText => $"{ByteSize.Format(_connection.Upload)} / {ByteSize.Format(_connection.Download)}";
 
-    public string ChainSummaryText => string.Join(" / ", _connection.Chains);
+    public string ChainSummaryText => string.Join(" / ", _connection.RoutePath);
 
     private static string FormatDuration(DateTimeOffset start, DateTimeOffset now)
     {

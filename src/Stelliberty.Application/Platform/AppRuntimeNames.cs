@@ -27,6 +27,9 @@ public static class AppRuntimeNames
 
     public static string ServiceInstalledBinaryStem => $"{FileToken(AppMetadata.Name)}_service_host{FileDevSuffix}";
 
+    // macOS/Linux 用户目录下的应用根目录名；Debug 与 Release 分开，互不污染数据。
+    public static string UserDirectoryName => $"{FileToken(AppMetadata.Name)}{FileDevSuffix}";
+
     public static string CoreLockPrefix => $".{FileToken(AppMetadata.Name)}-core-";
 
     public static string TrayBinaryName => OperatingSystem.IsWindows()

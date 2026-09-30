@@ -165,7 +165,6 @@
   "Connections.Detail.Path": "Path",
   "Connections.Detail.ProxyGroup": "Proxy Group",
   "Connections.Detail.ProxyNode": "Proxy Node",
-  "Connections.Detail.ProxyChain": "Proxy Chain",
   "Connections.Detail.DnsMode": "DNS Mode",
   "Connections.Detail.SpecialProxy": "Special Proxy",
   "Connections.Detail.SpecialRules": "Special Rules",
