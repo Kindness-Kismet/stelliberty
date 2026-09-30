@@ -82,3 +82,17 @@
 
 !/native/**/src/bin/
 !/native/**/src/bin/*.rs
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux / Unix
+*~
+.directory
