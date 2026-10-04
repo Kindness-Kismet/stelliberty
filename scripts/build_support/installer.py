@@ -25,6 +25,10 @@ INNO_SETUP_CANDIDATES = [
     Path(r"C:\Program Files\Inno Setup 7\ISCC.exe"),
     Path(r"C:\Program Files (x86)\Inno Setup 7\ISCC.exe"),
 ]
+MACOS_BUILD_VERSION_PATTERN = re.compile(
+    r"platform\s+MACOS\s+minos\s+(?P<minos>\S+)\s+sdk\s+(?P<sdk>\S+)",
+    re.MULTILINE,
+)
 
 
 def pack_installers(
@@ -71,7 +75,7 @@ def check_packaging_tools(platform_name: str) -> None:
     if platform_name.startswith("macos"):
         if sys.platform != "darwin":
             raise RuntimeError("macOS packaging tools can only be checked on a macOS host")
-        for command in ("hdiutil", "pkgbuild", "productbuild", "iconutil"):
+        for command in ("hdiutil", "pkgbuild", "productbuild", "iconutil", "xcrun", "vtool", "codesign"):
             ensure_command(command, f"Missing {command}")
             print(f"  Tool   {shutil.which(command)}", flush=True)
         return
@@ -153,6 +157,7 @@ def pack_macos_installers(
     ensure_command("pkgbuild", "Missing pkgbuild; cannot create the PKG component")
     ensure_command("productbuild", "Missing productbuild; cannot create the PKG")
     ensure_command("iconutil", "Missing iconutil; cannot create the macOS icon")
+    ensure_macos_apphost_tools()
 
     PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
     base_name = macos_package_base_name(metadata, platform_name, configuration)
@@ -178,6 +183,7 @@ def pack_macos_app(
         raise RuntimeError(f"macOS app bundles do not support this platform: {platform_name}")
 
     ensure_command("iconutil", "Missing iconutil; cannot create the macOS icon")
+    ensure_macos_apphost_tools()
     PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
     app_path = PACKAGES_DIR / f"{display_name(metadata, configuration)}.app"
 
@@ -235,6 +241,7 @@ def build_macos_app_bundle(
         raise FileExistsError(f"macOS UI executable destination already exists: {named_ui_executable_path}")
     # 只改 apphost 文件名；它仍加载原有的 UI 程序集和依赖配置。
     ui_executable_path.rename(named_ui_executable_path)
+    stamp_macos_apphosts((executable_path, named_ui_executable_path))
     write_macos_info_plist(metadata, configuration, platform_name, contents_dir / "Info.plist")
     build_macos_icns(resources_dir / "AppIcon.icns", configuration)
     return app_path
@@ -785,6 +792,75 @@ def write_macos_info_plist(
     output_path.write_text(render_macos_template("Info.plist.in", replacements), encoding="utf-8", newline="\n")
 
 
+def ensure_macos_apphost_tools() -> None:
+    for command in ("xcrun", "vtool", "codesign"):
+        ensure_command(command, f"Missing {command}; cannot stamp the macOS apphost SDK")
+
+
+def stamp_macos_apphosts(executable_paths: tuple[Path, ...]) -> None:
+    sdk_version = run_capture_checked(["xcrun", "--sdk", "macosx", "--show-sdk-version"]).strip()
+    parse_macos_version(sdk_version)
+
+    for executable_path in executable_paths:
+        minimum_version, existing_sdk_version = read_macos_build_version(executable_path)
+        target_sdk_version = max(
+            (existing_sdk_version, sdk_version),
+            key=parse_macos_version,
+        )
+        replace_macos_build_version(executable_path, minimum_version, target_sdk_version)
+        run_checked(["codesign", "--force", "--sign", "-", str(executable_path)])
+        run_checked(["codesign", "--verify", "--strict", str(executable_path)])
+
+        stamped_minimum_version, stamped_sdk_version = read_macos_build_version(executable_path)
+        if stamped_minimum_version != minimum_version or stamped_sdk_version != target_sdk_version:
+            raise RuntimeError(
+                f"macOS apphost SDK verification failed for {executable_path}: "
+                f"expected minos={minimum_version} sdk={target_sdk_version}, "
+                f"found minos={stamped_minimum_version} sdk={stamped_sdk_version}"
+            )
+        print(
+            f"  Apphost {executable_path.name} minos={stamped_minimum_version} sdk={stamped_sdk_version}",
+            flush=True,
+        )
+
+
+def read_macos_build_version(executable_path: Path) -> tuple[str, str]:
+    output = run_capture_checked(["vtool", "-show-build", str(executable_path)])
+    match = MACOS_BUILD_VERSION_PATTERN.search(output)
+    if match is None:
+        raise RuntimeError(f"macOS build version is missing from apphost: {executable_path}")
+    return match.group("minos"), match.group("sdk")
+
+
+def replace_macos_build_version(executable_path: Path, minimum_version: str, sdk_version: str) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{executable_path.name}.", dir=executable_path.parent)
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
+    temporary_path.unlink()
+    try:
+        run_checked([
+            "vtool",
+            "-set-build-version",
+            "macos",
+            minimum_version,
+            sdk_version,
+            "-replace",
+            "-output",
+            str(temporary_path),
+            str(executable_path),
+        ])
+        temporary_path.chmod(executable_path.stat().st_mode & 0o7777)
+        os.replace(temporary_path, executable_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def parse_macos_version(value: str) -> tuple[int, ...]:
+    if re.fullmatch(r"\d+(?:\.\d+){1,2}", value) is None:
+        raise RuntimeError(f"Invalid macOS version reported by packaging tools: {value!r}")
+    return tuple(int(part) for part in value.split("."))
+
+
 def render_macos_template(template_name: str, replacements: dict[str, str]) -> str:
     content = (MACOS_INSTALLER_TEMPLATE_DIR / template_name).read_text(encoding="utf-8")
     for key, value in replacements.items():
@@ -915,6 +991,26 @@ def run_checked(command: list[str], env: dict[str, str] | None = None) -> None:
     if result.stderr:
         print(result.stderr.rstrip(), flush=True)
     result.check_returncode()
+
+
+def run_capture_checked(command: list[str]) -> str:
+    result = subprocess.run(
+        command,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+    if result.returncode == 0:
+        return result.stdout
+
+    if result.stdout:
+        print(result.stdout.rstrip(), flush=True)
+    if result.stderr:
+        print(result.stderr.rstrip(), flush=True)
+    result.check_returncode()
+    raise AssertionError("unreachable")
 
 
 def require_file(path: Path) -> None:
