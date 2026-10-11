@@ -10,7 +10,8 @@ public sealed class AppSettings
     public const int DefaultMixedPort = 8888;
     public const string DefaultExternalControllerAddress = "127.0.0.1:9090";
 #endif
-    public const string DefaultTunDevice = "clash";
+    // macOS 留空让核心自动分配未占用的 utunN。
+    public static string DefaultTunDevice => OperatingSystem.IsMacOS() ? string.Empty : "clash";
     public const int DefaultTunMtu = 9000;
 
     public string Language { get; set; } = "System";
