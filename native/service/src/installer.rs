@@ -470,12 +470,12 @@ fn macos_install() -> Result<()> {
     let _ = command_success("launchctl", &["bootout", "system", launchd_plist_path()]);
     let binary_path =
         std::env::current_exe().context("Failed to get the service executable path")?;
-    let (user_name, group_name) = macos_service_owner(&binary_path)?;
+    // 服务及其核心需要 root 权限创建 TUN；IPC 仍按服务文件所有者授权。
     let plist = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key><string>{}</string>\n  <key>UserName</key><string>{}</string>\n  <key>GroupName</key><string>{}</string>\n  <key>ProgramArguments</key><array><string>{}</string></array>\n  <key>RunAtLoad</key><true/>\n  <key>KeepAlive</key><true/>\n</dict>\n</plist>\n",
         xml_escape(launchd_label()),
-        xml_escape(&user_name),
-        xml_escape(&group_name),
+        "root",
+        "wheel",
         xml_escape(&binary_path.display().to_string())
     );
     std::fs::write(launchd_plist_path(), plist).context("Failed to write the launchd plist")?;
@@ -490,40 +490,6 @@ fn macos_uninstall() -> Result<()> {
         std::fs::remove_file(path).context("Failed to delete the launchd plist")?;
     }
     Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn macos_service_owner(path: &std::path::Path) -> Result<(String, String)> {
-    use std::ffi::CStr;
-    use std::os::unix::fs::MetadataExt;
-
-    let metadata =
-        std::fs::metadata(path).context("Failed to read the service executable owner")?;
-    // 安全前提：getpwuid/getgrgid 返回静态系统记录；空指针转为 Err。
-    unsafe {
-        let user = libc::getpwuid(metadata.uid());
-        if user.is_null() {
-            return Err(anyhow::anyhow!(
-                "Service executable owner user does not exist"
-            ));
-        }
-
-        let group = libc::getgrgid(metadata.gid());
-        if group.is_null() {
-            return Err(anyhow::anyhow!(
-                "Service executable owner group does not exist"
-            ));
-        }
-
-        Ok((
-            CStr::from_ptr((*user).pw_name)
-                .to_string_lossy()
-                .into_owned(),
-            CStr::from_ptr((*group).gr_name)
-                .to_string_lossy()
-                .into_owned(),
-        ))
-    }
 }
 
 #[cfg(target_os = "macos")]

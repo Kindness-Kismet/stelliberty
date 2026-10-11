@@ -20,7 +20,7 @@ public sealed record RuntimeConfigParams
             OutboundMode = NormalizeOutboundMode(settings.OutboundMode),
             IsTunEnabled = settings.IsTunEnabled,
             TunStack = NormalizeTunStack(settings.TunStack),
-            TunDevice = TrimOrDefault(settings.TunDevice, Default.TunDevice),
+            TunDevice = NormalizeTunDevice(settings.TunDevice),
             IsTunAutoRouteEnabled = settings.IsTunAutoRouteEnabled,
             IsTunAutoRedirectEnabled = settings.IsTunAutoRedirectEnabled,
             IsTunAutoDetectInterfaceEnabled = settings.IsTunAutoDetectInterfaceEnabled,
@@ -341,6 +341,12 @@ public sealed record RuntimeConfigParams
     private static IReadOnlyList<string> SplitMapValue(string value)
     {
         return value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private static string NormalizeTunDevice(string value)
+    {
+        var device = TrimOrDefault(value, Default.TunDevice);
+        return OperatingSystem.IsMacOS() && device == "clash" ? string.Empty : device;
     }
 
     private static string TrimOrDefault(string value, string fallback)
