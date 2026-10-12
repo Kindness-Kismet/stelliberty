@@ -482,6 +482,7 @@
   "Settings.Field.Theme": "Theme",
   "Settings.Field.Accent": "Accent Color",
   "Settings.Field.WindowEffect": "Window Effect",
+  "Settings.Field.SidebarDivider": "Show Sidebar Divider",
   "Settings.Field.Language": "Language",
   "Settings.ClashFeature.Network": "Network",
   "Settings.ClashFeature.PortControl": "Port Control",

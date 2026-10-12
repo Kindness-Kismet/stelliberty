@@ -482,6 +482,7 @@
   "Settings.Field.Theme": "主題",
   "Settings.Field.Accent": "主題顏色",
   "Settings.Field.WindowEffect": "視窗效果",
+  "Settings.Field.SidebarDivider": "顯示側欄分隔線",
   "Settings.Field.Language": "語言設定",
   "Settings.ClashFeature.Network": "網路設定",
   "Settings.ClashFeature.PortControl": "連接埠控制",
