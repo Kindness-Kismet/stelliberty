@@ -44,6 +44,7 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     private bool _isTakeoverTunTab;
     private bool _isCoreRunning;
     private OutboundMode _outboundMode = OutboundMode.Rule;
+    private OutboundMode? _pendingOutboundMode;
     private DateTimeOffset? _coreRunningSince;
     private TimeSpan _uptime = TimeSpan.Zero;
     private string? _memoryValueText;
@@ -168,13 +169,14 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
 
     public void ApplyOutboundMode(OutboundMode mode)
     {
-        if (_outboundMode == mode)
+        if (_outboundMode == mode && _pendingOutboundMode is null)
         {
             return;
         }
 
         _outboundMode = mode;
-        RaiseHomeStateChanged();
+        _pendingOutboundMode = null;
+        RaiseOutboundStateChanged();
     }
 
     public void ApplyCoreRunning(bool isRunning)
@@ -206,6 +208,10 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         }
 
         _isCoreRunning = isRunning;
+        if (!isRunning)
+        {
+            _pendingOutboundMode = null;
+        }
         RaiseHomeStateChanged();
     }
 
@@ -306,6 +312,12 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
     public bool IsGlobalOutboundSelected => _outboundMode == OutboundMode.Global;
 
     public bool IsDirectOutboundSelected => _outboundMode == OutboundMode.Direct;
+
+    public bool IsRuleOutboundPending => _pendingOutboundMode == OutboundMode.Rule;
+
+    public bool IsGlobalOutboundPending => _pendingOutboundMode == OutboundMode.Global;
+
+    public bool IsDirectOutboundPending => _pendingOutboundMode == OutboundMode.Direct;
 
     public string OutboundModeDescriptionText => _outboundMode switch
     {
@@ -565,6 +577,10 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         if (mode is { } coreMode)
         {
             _outboundMode = coreMode;
+            if (_pendingOutboundMode == coreMode)
+            {
+                _pendingOutboundMode = null;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(version))
@@ -990,7 +1006,7 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
 
     private async Task SetOutboundModeAsync(OutboundMode mode)
     {
-        if (_outboundMode == mode)
+        if (_outboundMode == mode || _pendingOutboundMode is not null)
         {
             return;
         }
@@ -1001,22 +1017,29 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var previous = _outboundMode;
-        _outboundMode = mode;
-        RaiseHomeStateChanged();
+        _pendingOutboundMode = mode;
+        RaiseOutboundStateChanged();
 
-        // 先更新 UI，再写入核心；MainWindow 统一持久化模式变化。
+        // 没有运行时客户端时保留原有的本地切换行为。
         if (_proxyClient is null)
         {
+            ApplyOutboundMode(mode);
             return;
         }
 
         var applied = await _proxyClient.SetOutboundModeAsync(mode);
-        if (!applied)
+        Post(() => CompleteOutboundModeRequest(mode, applied));
+    }
+
+    private void CompleteOutboundModeRequest(OutboundMode mode, bool applied)
+    {
+        if (_isDisposed || _pendingOutboundMode != mode || applied)
         {
-            _outboundMode = previous;
-            Post(RaiseHomeStateChanged);
+            return;
         }
+
+        _pendingOutboundMode = null;
+        RaiseOutboundStateChanged();
     }
 
     private void SetTakeoverTab(bool tun)
@@ -1133,6 +1156,9 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsRuleOutboundSelected));
         OnPropertyChanged(nameof(IsGlobalOutboundSelected));
         OnPropertyChanged(nameof(IsDirectOutboundSelected));
+        OnPropertyChanged(nameof(IsRuleOutboundPending));
+        OnPropertyChanged(nameof(IsGlobalOutboundPending));
+        OnPropertyChanged(nameof(IsDirectOutboundPending));
         OnPropertyChanged(nameof(OutboundModeDescriptionText));
         OnPropertyChanged(nameof(UptimeValueText));
         OnPropertyChanged(nameof(MemoryValueText));
@@ -1160,6 +1186,18 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(NetworkSignalTag));
         OnPropertyChanged(nameof(NetworkTypeText));
         OnPropertyChanged(nameof(NetworkNameValueText));
+    }
+
+    private void RaiseOutboundStateChanged()
+    {
+        OnPropertyChanged(nameof(OutboundMode));
+        OnPropertyChanged(nameof(IsRuleOutboundSelected));
+        OnPropertyChanged(nameof(IsGlobalOutboundSelected));
+        OnPropertyChanged(nameof(IsDirectOutboundSelected));
+        OnPropertyChanged(nameof(IsRuleOutboundPending));
+        OnPropertyChanged(nameof(IsGlobalOutboundPending));
+        OnPropertyChanged(nameof(IsDirectOutboundPending));
+        OnPropertyChanged(nameof(OutboundModeDescriptionText));
     }
 
     private void OnLanguageChanged(object? sender, EventArgs args)
