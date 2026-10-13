@@ -878,18 +878,18 @@ dependencies = [
 
 [[package]]
 name = "interoptopus"
-version = "0.16.5"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "154b700181e0d5170c1d85fdd9c1c54c0b1795754e7f870d23a890072e8a046e"
+checksum = "ca3f1c59767202ef62d168c27c2be55dfa717c313481f2f9f0833a9e3b4cc728"
 dependencies = [
  "interoptopus_proc",
 ]
 
 [[package]]
 name = "interoptopus_backends"
-version = "0.16.5"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "901fd38859744f0563dd819887d28abbab00fe348e72af49ac603b31057e2909"
+checksum = "e4299bdf81c896713af22f8e2887379a6e47c4836a325ca8eb3ca75a474ae23b"
 dependencies = [
  "interoptopus",
  "tar",
@@ -898,9 +898,9 @@ dependencies = [
 
 [[package]]
 name = "interoptopus_csharp"
-version = "0.16.5"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc575d06e31e7332d0b7dd38220c8db4f9a5a7483ef3d9ca5ea988645dbe67ac"
+checksum = "b4369d33d9ef7d547fd87cf1d7f22e388095285f31ac7d7079f562ab181d7f5e"
 dependencies = [
  "interoptopus",
  "interoptopus_backends",
@@ -908,18 +908,18 @@ dependencies = [
 
 [[package]]
 name = "interoptopus_proc"
-version = "0.16.5"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b313e38c11d36418fb918f997360745d9b9d7b624edf537ba1c04b5c7235b87c"
+checksum = "98158f28d831edf71d92dd9ce79e5cd1385d9bc1725762c7c736b17754e2b275"
 dependencies = [
  "interoptopus_proc_impl",
 ]
 
 [[package]]
 name = "interoptopus_proc_impl"
-version = "0.16.5"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cd19b15575a2d4259f8e24dc7731f02c98ed8465307cf833b3663f1518fac0e"
+checksum = "44c18aa27b88ed72455896c9b9746b65dbc80fb3e679ef5d9d3ad7438b1b26c5"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -1000,9 +1000,9 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
-version = "0.2.189"
+version = "0.2.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
 
 [[package]]
 name = "linux-raw-sys"
@@ -1875,9 +1875,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.53.1"
+version = "1.53.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
+checksum = "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
 dependencies = [
  "bytes",
  "libc",

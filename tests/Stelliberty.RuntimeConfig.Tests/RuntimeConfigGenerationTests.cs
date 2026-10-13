@@ -41,13 +41,43 @@ public sealed class RuntimeConfigGenerationTests
     {
         var parameters = RuntimeConfigParams.FromSettings(new AppSettings());
 
-        Assert.Equal("clash", parameters.TunDevice);
+        Assert.Equal(OperatingSystem.IsMacOS() ? string.Empty : "clash", parameters.TunDevice);
         Assert.True(parameters.IsTunAutoRouteEnabled);
         Assert.True(parameters.IsTunAutoRedirectEnabled);
         Assert.True(parameters.IsTunAutoDetectInterfaceEnabled);
         Assert.True(parameters.IsTunStrictRouteEnabled);
         Assert.Equal(["any:53"], parameters.TunDnsHijacks);
         Assert.Equal(9000, parameters.TunMtu);
+    }
+
+    [Theory(DisplayName = "Legacy TUN device names use automatic allocation only on macOS")]
+    [InlineData("clash")]
+    [InlineData(" clash ")]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void LegacyTunDeviceUsesPlatformDefault(string device)
+    {
+        var parameters = RuntimeConfigParams.FromSettings(new AppSettings { TunDevice = device });
+        var result = new RuntimeConfigGenerator().Generate(new RuntimeConfigGenerationRequest(
+            "proxies: []\nproxy-groups: []\nrules: []",
+            [],
+            parameters));
+
+        Assert.Equal(
+            OperatingSystem.IsMacOS() ? string.Empty : "clash",
+            Scalar(Mapping(Load(result.RuntimeConfigContent), "tun"), "device"));
+    }
+
+    [Theory(DisplayName = "Custom TUN device names are preserved")]
+    [InlineData("utun7", "utun7")]
+    [InlineData(" utun42 ", "utun42")]
+    [InlineData("Meta", "Meta")]
+    [InlineData("CLASH", "CLASH")]
+    public void CustomTunDeviceIsPreserved(string device, string expected)
+    {
+        var parameters = RuntimeConfigParams.FromSettings(new AppSettings { TunDevice = device });
+
+        Assert.Equal(expected, parameters.TunDevice);
     }
 
     [Fact(DisplayName = "From settings drops blank controller and incomplete LAN authentication")]

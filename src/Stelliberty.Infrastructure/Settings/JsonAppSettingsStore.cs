@@ -218,6 +218,11 @@ public sealed class JsonAppSettingsStore : IAppSettingsStore
         settings.PacScript ??= defaults.PacScript;
         settings.TunStack ??= defaults.TunStack;
         settings.TunDevice ??= defaults.TunDevice;
+        // 兼容旧版默认设备名；自定义名称继续保留。
+        if (OperatingSystem.IsMacOS() && settings.TunDevice.Trim() == "clash")
+        {
+            settings.TunDevice = defaults.TunDevice;
+        }
         settings.TunDnsHijack ??= defaults.TunDnsHijack;
         settings.TunRouteExcludeAddresses ??= defaults.TunRouteExcludeAddresses;
         settings.DnsListen ??= defaults.DnsListen;
