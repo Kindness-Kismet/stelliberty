@@ -304,7 +304,9 @@ public sealed class RuntimeConfigGenerationTests
         var dns = Mapping(root, "dns");
 
         Assert.Equal("true", Scalar(tun, "enable"));
-        Assert.Equal("clash", Scalar(tun, "device"));
+        Assert.Equal(
+            OperatingSystem.IsMacOS() ? string.Empty : "clash",
+            Scalar(tun, "device"));
         Assert.Equal("true", Scalar(tun, "auto-route"));
         Assert.Equal("true", Scalar(tun, "auto-redirect"));
         Assert.Equal("true", Scalar(tun, "auto-detect-interface"));
