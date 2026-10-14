@@ -423,7 +423,8 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
         }
 
         var id = _editingRule?.Id ?? $"custom-{Guid.NewGuid():N}";
-        var rule = new EditableRule(id, SelectedRuleType.Type, Payload, SelectedOutboundTarget?.Value ?? string.Empty, SelectedRuleType.Options);
+        var rule = new EditableRule(id, SelectedRuleType.Type, Payload, SelectedOutboundTarget?.Value ?? string.Empty,
+            SelectedRuleType.Options, _editingRule?.IsEnabled ?? true);
         var custom = CustomRules.Select(row => row.ToEditableRule()).ToList();
         if (_editingRule is not null)
         {
@@ -456,7 +457,11 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
             SaveCurrentRules(CustomRules.Select(row => row.ToEditableRule()).ToList());
             RuntimeRefreshRequested?.Invoke(this, EventArgs.Empty);
         }
-        catch (RuleOverrideException exception) { ShowRuleSaveToast(exception.Error); }
+        catch (RuleOverrideException exception)
+        {
+            LoadEditorSnapshot();
+            ShowRuleSaveToast(exception.Error);
+        }
     }
 
     private void SaveCurrentRules(IReadOnlyList<EditableRule> customRules, IReadOnlyList<string>? ruleOrder = null)
@@ -631,8 +636,10 @@ public sealed class RulePageViewModel : ViewModelBase, IDisposable
             {
                 _payloadErrorKey = "Rules.Error.DuplicateCustom";
             }
-            else if (BuiltinRules.Any(row => row.IsEnabled
-                && string.Equals(row.Item.MatchKey, matchKey, StringComparison.Ordinal)))
+            else if ((_editingRule?.IsEnabled ?? true)
+                && !string.Equals(_editingRule?.Item.MatchKey, matchKey, StringComparison.Ordinal)
+                && BuiltinRules.Any(row => row.IsEnabled
+                    && string.Equals(row.Item.MatchKey, matchKey, StringComparison.Ordinal)))
             {
                 _payloadErrorKey = "Rules.Error.DuplicateBuiltin";
             }

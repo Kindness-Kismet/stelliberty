@@ -177,24 +177,13 @@ public sealed class HomePageViewModel : ViewModelBase, IDisposable
         RaiseHomeStateChanged();
     }
 
-    public void ApplyCoreRunning(bool isRunning)
+    public void ApplyCoreRunning(bool isRunning, DateTimeOffset? runningSince)
     {
-        var now = _now();
-        if (isRunning && _coreRunningSince is null)
-        {
-            _coreRunningSince = now;
-        }
-
-        if (isRunning && _coreRunningSince is { } since)
-        {
-            _uptime = now >= since ? now - since : TimeSpan.Zero;
-        }
-        else if (!isRunning && _isCoreRunning)
+        _coreRunningSince = isRunning ? runningSince : null;
+        _uptime = _coreRunningSince is { } since ? _now() - since : TimeSpan.Zero;
+        if (!isRunning && _isCoreRunning)
         {
             // 仅在运行转为停止时清空；初始与重复的停止状态不能打断图表采样。
-            _coreRunningSince = null;
-            _uptime = TimeSpan.Zero;
-
             _directRuntimeTrafficTracker.Reset();
             _uploadSpeed = 0;
             _downloadSpeed = 0;
