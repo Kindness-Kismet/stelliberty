@@ -384,7 +384,7 @@ public sealed class RuleOverrideService(
         var content = baselineSource.ReadBaseline(subscriptionId)
             ?? throw new RuleOverrideException(RuleOverrideError.BaselineNotReady);
         var previousSet = overrideStore.Load(subscriptionId);
-        var previousRules = previousSet.CustomRules.ToDictionary(rule => rule.Id, StringComparer.Ordinal);
+        var previousRules = previousSet.CustomRules.ToLookup(rule => rule.Id, StringComparer.Ordinal);
         var enabledBuiltinRules = ParseBuiltinRules(content)
             .Where(rule => !disabledBuiltinRuleKeys.Contains(RuleKey.Create(rule.Type, rule.Payload, rule.Proxy, rule.Options)))
             .ToList();
@@ -399,9 +399,8 @@ public sealed class RuleOverrideService(
         var duplicateBuiltin = customRules.FirstOrDefault(rule => rule.IsEnabled
             && builtinKeys.Contains(rule.MatchKey)
             && (reenabledBuiltinKeys.Contains(rule.MatchKey)
-                || !previousRules.TryGetValue(rule.Id, out var previous)
-                || !previous.IsEnabled
-                || !string.Equals(previous.MatchKey, rule.MatchKey, StringComparison.Ordinal)));
+                || !previousRules[rule.Id].Any(previous => previous.IsEnabled
+                    && string.Equals(previous.MatchKey, rule.MatchKey, StringComparison.Ordinal))));
         if (duplicateBuiltin is not null)
         {
             throw new RuleOverrideException(RuleOverrideError.DuplicateBuiltinRule);
