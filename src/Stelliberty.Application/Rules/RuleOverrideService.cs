@@ -383,11 +383,24 @@ public sealed class RuleOverrideService(
         // 基线缺失时无法判定内置规则集合，保存会污染顺序与查重，直接拒绝。
         var content = baselineSource.ReadBaseline(subscriptionId)
             ?? throw new RuleOverrideException(RuleOverrideError.BaselineNotReady);
-        var builtinKeys = ParseBuiltinRules(content)
+        var previousSet = overrideStore.Load(subscriptionId);
+        var previousRules = previousSet.CustomRules.ToLookup(rule => rule.Id, StringComparer.Ordinal);
+        var enabledBuiltinRules = ParseBuiltinRules(content)
             .Where(rule => !disabledBuiltinRuleKeys.Contains(RuleKey.Create(rule.Type, rule.Payload, rule.Proxy, rule.Options)))
+            .ToList();
+        var builtinKeys = enabledBuiltinRules
             .Select(rule => RuleKey.CreateMatch(rule.Type, rule.Payload, rule.Options))
             .ToHashSet(StringComparer.Ordinal);
-        var duplicateBuiltin = customRules.FirstOrDefault(rule => builtinKeys.Contains(rule.MatchKey));
+        var reenabledBuiltinKeys = enabledBuiltinRules
+            .Where(rule => previousSet.DisabledBuiltinRuleKeys.Contains(RuleKey.Create(rule.Type, rule.Payload, rule.Proxy, rule.Options)))
+            .Select(rule => RuleKey.CreateMatch(rule.Type, rule.Payload, rule.Options))
+            .ToHashSet(StringComparer.Ordinal);
+        // 订阅更新带来的旧冲突不阻塞无关编辑，只拒绝本次新增或重新启用的冲突。
+        var duplicateBuiltin = customRules.FirstOrDefault(rule => rule.IsEnabled
+            && builtinKeys.Contains(rule.MatchKey)
+            && (reenabledBuiltinKeys.Contains(rule.MatchKey)
+                || !previousRules[rule.Id].Any(previous => previous.IsEnabled
+                    && string.Equals(previous.MatchKey, rule.MatchKey, StringComparison.Ordinal))));
         if (duplicateBuiltin is not null)
         {
             throw new RuleOverrideException(RuleOverrideError.DuplicateBuiltinRule);

@@ -557,7 +557,13 @@ internal sealed partial class TrayCoreRuntimeHost : ITrayCoreRuntime, IAsyncDisp
                 AppLogger.Info($"Core generation advanced: pid={pid} generation={generation}");
             }
 
-            status = new TrayCoreStatus(snapshot, generation);
+            // 计时起点随核心状态同步，界面重建和重复查询不能重新计时。
+            var runningSince = snapshot.State == CoreState.Running
+                ? snapshot.Pid == _status.Snapshot.Pid
+                    ? _status.Snapshot.RunningSince ?? DateTimeOffset.UtcNow
+                    : DateTimeOffset.UtcNow
+                : (DateTimeOffset?)null;
+            status = new TrayCoreStatus(snapshot with { RunningSince = runningSince }, generation);
             _status = status;
         }
 

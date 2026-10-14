@@ -520,7 +520,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
                 ClearPendingCoreLogs();
             }
 
-            HomePage.ApplyCoreRunning(isRunning);
+            HomePage.ApplyCoreRunning(isRunning, snapshot.RunningSince);
             CoreLogPage.ApplyCoreRunning(isRunning);
             RulePage.ApplyCoreRunning(isRunning);
         });
