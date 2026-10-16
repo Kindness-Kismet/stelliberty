@@ -144,13 +144,14 @@ public sealed class WindowsUwpLoopbackService : IUwpLoopbackService
         try
         {
             var count = TryEnumAppContainers(out containers);
+            // 没有可枚举应用时，也不能丢弃现有豁免。
+            var loopbackSids = ReadCurrentLoopbackSids();
             if (count == 0 || containers == IntPtr.Zero)
             {
                 AppLogger.Warning("No UWP app container was found");
-                return new UwpLoopbackSnapshot([], []);
+                return new UwpLoopbackSnapshot([], loopbackSids);
             }
 
-            var loopbackSids = ReadCurrentLoopbackSids();
             var loopbackSidSet = new HashSet<byte[]>(loopbackSids, ByteArrayComparer.Instance);
             var packages = ReadAppContainers(containers, count, loopbackSidSet);
             return new UwpLoopbackSnapshot(packages, loopbackSids);
@@ -196,34 +197,40 @@ public sealed class WindowsUwpLoopbackService : IUwpLoopbackService
         var result = NetworkIsolationGetAppContainerConfig(out var count, out var sids);
         if (result != 0)
         {
-            AppLogger.Warning($"UWP loopback configuration read failed; treating it as empty: {BuildNetworkIsolationErrorMessage("NetworkIsolationGetAppContainerConfig", result)}");
-            return [];
-        }
-
-        if (count == 0 || sids == IntPtr.Zero)
-        {
-            return [];
+            // 读取失败不能代表空配置，否则保存会覆盖现有豁免。
+            throw new InvalidOperationException(BuildNetworkIsolationErrorMessage("NetworkIsolationGetAppContainerConfig", result));
         }
 
         try
         {
+            if (count == 0)
+            {
+                return [];
+            }
+
+            if (sids == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("NetworkIsolationGetAppContainerConfig returned no SID buffer for a non-empty configuration");
+            }
+
             var sidSize = Marshal.SizeOf<SidAndAttributes>();
             var resultSids = new List<byte[]>((int)count);
             for (var index = 0; index < count; index++)
             {
                 var item = Marshal.PtrToStructure<SidAndAttributes>(IntPtr.Add(sids, index * sidSize));
-                var sidBytes = CopySidBytes(item.Sid);
-                if (sidBytes is not null)
-                {
-                    resultSids.Add(sidBytes);
-                }
+                var sidBytes = CopySidBytes(item.Sid)
+                    ?? throw new InvalidOperationException("UWP loopback configuration contains an invalid SID");
+                resultSids.Add(sidBytes);
             }
 
             return resultSids;
         }
         finally
         {
-            LocalFree(sids);
+            if (sids != IntPtr.Zero)
+            {
+                LocalFree(sids);
+            }
         }
     }
 
