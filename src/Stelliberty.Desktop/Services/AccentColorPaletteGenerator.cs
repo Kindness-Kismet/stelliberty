@@ -4,8 +4,8 @@ namespace Stelliberty.Desktop.Services;
 
 internal static class AccentColorPaletteGenerator
 {
-    private static readonly Color White = Colors.White;
-    private static readonly Color Black = Colors.Black;
+    private static readonly Color LightOnAccent = ThemeSurfaceColors.Light;
+    private static readonly Color DarkOnAccent = ThemeSurfaceColors.Dark;
 
     public static AccentColorPalette Generate(Color source, bool isLightTheme)
     {
@@ -15,7 +15,10 @@ internal static class AccentColorPaletteGenerator
         var surface = isLightTheme ? ThemeSurfaceColors.Light : ThemeSurfaceColors.Dark;
         var accentTone = isLightTheme ? 0.54 : 0.78;
         var accent = EnsureSurfaceContrast(FromOklch(accentTone, chroma, hue), chroma, hue, surface, isLightTheme);
-        var onAccent = ContrastRatio(accent, White) >= ContrastRatio(accent, Black) ? White : Black;
+        var neutralOnAccent = ContrastRatio(accent, LightOnAccent) >= ContrastRatio(accent, DarkOnAccent)
+            ? LightOnAccent
+            : DarkOnAccent;
+        var onAccent = FromOklch(ToOklch(neutralOnAccent).Lightness, chroma, hue);
 
         return new AccentColorPalette(
             accent,

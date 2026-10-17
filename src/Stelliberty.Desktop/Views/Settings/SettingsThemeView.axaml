@@ -80,6 +80,17 @@
           </ComboBox>
         </Grid>
       </Border>
+      <Border Classes="settings-row-divider" />
+      <Border Classes="settings-inline-row">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0" Classes="settings-row-title"
+                     VerticalAlignment="Center"
+                     Text="{Binding Theme.SidebarDividerText}" />
+          <ToggleSwitch Grid.Column="1"
+                        AutomationProperties.AutomationId="Settings.SidebarDividerToggle"
+                        IsChecked="{Binding Theme.IsSidebarDividerVisible, Mode=TwoWay}" />
+        </Grid>
+      </Border>
     </StackPanel>
   </Border>
 </StackPanel>

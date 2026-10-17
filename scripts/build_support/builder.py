@@ -132,7 +132,7 @@ def build_rust(metadata: AppMetadata, configuration: str, target: PlatformTarget
     # 服务版本固定为 crate 版本，不随 App 版本漂移。
     env = {"STELLIBERTY_APP_NAME": metadata.app_name}
     if configuration == "release":
-        env.update(release_path_remap_env())
+        env.update(release_rust_env(target))
 
     run(command, env)
 
@@ -187,16 +187,19 @@ def reset_output_directory(output_dir: Path) -> None:
         shutil.rmtree(output_dir)
         print(f"  Removed {output_dir}", flush=True)
 
-def release_path_remap_env() -> dict[str, str]:
+def release_rust_env(target: PlatformTarget) -> dict[str, str]:
     separator = "\x1f"
-    remaps = [
+    flags = [
         rust_path_remap(ROOT, "."),
         rust_path_remap(Path.home(), ".home"),
     ]
     cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
-    remaps.append(rust_path_remap(cargo_home, ".cargo"))
+    flags.append(rust_path_remap(cargo_home, ".cargo"))
+    if target.rust_target.endswith("-apple-darwin"):
+        # Rust 内部 strip 可能产生 dyld 拒绝的 LINKEDIT 对齐；交给 Apple linker 处理。
+        flags.extend(["-Cstrip=none", "-Clink-arg=-Wl,-x"])
     current = os.environ.get("CARGO_ENCODED_RUSTFLAGS")
-    encoded = separator.join(remaps) if not current else f"{current}{separator}{separator.join(remaps)}"
+    encoded = separator.join(flags) if not current else f"{current}{separator}{separator.join(flags)}"
     return {"CARGO_ENCODED_RUSTFLAGS": encoded}
 
 def rust_path_remap(source: Path, target: str) -> str:

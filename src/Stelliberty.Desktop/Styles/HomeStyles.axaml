@@ -18,14 +18,32 @@
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
     <Setter Property="FontSize" Value="14" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="SegmentGlass"
+                Background="Transparent"
+                BorderBrush="Transparent"
+                BorderThickness="0"
+                CornerRadius="{TemplateBinding CornerRadius}">
+          <Border x:Name="SegmentTint"
+                  Background="Transparent"
+                  CornerRadius="{TemplateBinding CornerRadius}">
+            <ContentPresenter Padding="{TemplateBinding Padding}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                              Content="{TemplateBinding Content}" />
+          </Border>
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </Style>
-  <Style Selector="Button.segment /template/ ContentPresenter">
+  <Style Selector="Button.segment /template/ Border#SegmentTint">
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <Style Selector="Button.segment:pointerover /template/ ContentPresenter">
+  <Style Selector="Button.segment:pointerover /template/ Border#SegmentTint">
     <Setter Property="Background" Value="{DynamicResource AppOverlayBrush}" />
   </Style>
-  <Style Selector="Button.segment:pressed /template/ ContentPresenter">
+  <Style Selector="Button.segment:pressed /template/ Border#SegmentTint">
     <Setter Property="Background" Value="{DynamicResource AppOverlayBrush}" />
   </Style>
   <Style Selector="Button.segment:pointerover">
@@ -35,17 +53,64 @@
     <Setter Property="Foreground" Value="{DynamicResource AppOnAccentBrush}" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
-  <Style Selector="Button.segment.selected /template/ ContentPresenter">
+  <Style Selector="Button.segment.selected /template/ Border#SegmentTint">
     <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
   </Style>
-  <Style Selector="Button.segment.selected:pointerover /template/ ContentPresenter">
+  <Style Selector="Button.segment.selected:pointerover /template/ Border#SegmentTint">
     <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
   </Style>
-  <Style Selector="Button.segment.selected:pressed /template/ ContentPresenter">
+  <Style Selector="Button.segment.selected:pressed /template/ Border#SegmentTint">
     <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
   </Style>
   <Style Selector="Button.segment.selected:pointerover">
     <Setter Property="Foreground" Value="{DynamicResource AppOnAccentBrush}" />
+  </Style>
+  <Style Selector="Button.segment.pending">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+  </Style>
+  <Style Selector="Button.segment.pending /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="{DynamicResource AppAccentTintBrush}" />
+  </Style>
+  <Style Selector="Button.segment.pending:pointerover /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="{DynamicResource AppAccentTintBrush}" />
+  </Style>
+  <Style Selector="Button.segment.pending:pressed /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="{DynamicResource AppAccentTintBrush}" />
+  </Style>
+
+  <Style Selector="Window.frutiger-aero Button.segment /template/ Border#SegmentGlass">
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.pending /template/ Border#SegmentGlass">
+    <Setter Property="Background" Value="{DynamicResource AppCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource AppSurfaceListShadow}" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.pending /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.pending:pointerover /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.pending:pressed /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.selected">
+    <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.selected /template/ Border#SegmentGlass">
+    <Setter Property="Background" Value="{DynamicResource AppCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource AppSurfaceListShadow}" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.selected /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="{DynamicResource AppAccentTintBrush}" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.selected:pointerover /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="{DynamicResource AppAccentTintBrush}" />
+  </Style>
+  <Style Selector="Window.frutiger-aero Button.segment.selected:pressed /template/ Border#SegmentTint">
+    <Setter Property="Background" Value="{DynamicResource AppAccentTintBrush}" />
   </Style>
 
   <Style Selector="TextBlock.home-metric-value">

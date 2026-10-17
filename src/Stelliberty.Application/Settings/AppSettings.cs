@@ -24,6 +24,8 @@ public sealed class AppSettings
 
     public string WindowEffect { get; set; } = "None";
 
+    public bool IsSidebarDividerVisible { get; set; } = true;
+
     public double? WindowWidth { get; set; }
 
     public double? WindowHeight { get; set; }

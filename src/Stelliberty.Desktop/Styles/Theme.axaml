@@ -26,6 +26,7 @@
       <SolidColorBrush x:Key="CodeSyntaxCommentBrush" Color="#7C7F93" />
 
       <SolidColorBrush x:Key="AppBorderBrush" Color="#E5E7EB" />
+      <SolidColorBrush x:Key="AppSidebarDividerBrush" Color="#20000000" />
       <SolidColorBrush x:Key="AppOverlaySubtleBrush" Color="#0A000000" />
       <SolidColorBrush x:Key="AppOverlayBrush" Color="#1A212121" />
       <SolidColorBrush x:Key="AppInputBrush" Color="#1A000000" />
@@ -71,6 +72,7 @@
       <SolidColorBrush x:Key="CodeSyntaxCommentBrush" Color="#9399B2" />
 
       <SolidColorBrush x:Key="AppBorderBrush" Color="#3A3A3A" />
+      <SolidColorBrush x:Key="AppSidebarDividerBrush" Color="#20FFFFFF" />
       <SolidColorBrush x:Key="AppOverlaySubtleBrush" Color="#14FFFFFF" />
       <SolidColorBrush x:Key="AppOverlayBrush" Color="#1AFAFAFA" />
       <SolidColorBrush x:Key="AppInputBrush" Color="#1AFFFFFF" />

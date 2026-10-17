@@ -40,7 +40,8 @@
     <Setter Property="Padding" Value="20,5,3,5" />
   </Style>
   <Style Selector="Border.sidebar-shadow">
-    <Setter Property="BoxShadow" Value="{DynamicResource AppSidebarShadow}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSidebarDividerBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
   </Style>
   <!-- 初始隐藏；进出过渡由 MainWindow 代码错峰驱动，避免两页叠加闪烁。 -->
   <Style Selector="ContentControl.page-host">
@@ -130,7 +131,6 @@
   </Style>
   <Style Selector="Button.nav-item.selected /template/ Border#NavRoot">
     <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource AppNavItemSelectedShadow}" />
   </Style>
   <Style Selector="Button.nav-item.selected:pointerover /template/ Border#NavRoot">
     <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />

@@ -42,6 +42,9 @@
     <StyleInclude Source="avares://stelliberty_ui/Styles/DialogStyles.axaml" />
     <StyleInclude Source="avares://stelliberty_ui/Styles/ToastStyles.axaml" />
     <StyleInclude Source="avares://stelliberty_ui/Styles/SettingsStyles.axaml" />
+    <Style Selector="Border.sidebar-shadow.divider-hidden">
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
   </Window.Styles>
 
   <Grid RowDefinitions="36,*">
@@ -50,6 +53,11 @@
             Background="Transparent"
             PointerPressed="OnTitleBarPointerPressed">
       <Grid x:Name="TitleBarLayout" ColumnDefinitions="*,Auto,Auto">
+        <Border Width="220"
+                HorizontalAlignment="Left"
+                Classes="sidebar-shadow"
+                Classes.divider-hidden="{Binding !Theme.IsSidebarDividerVisible}"
+                IsHitTestVisible="False" />
         <controls:FpsCounter Grid.Column="1"
                              AutomationProperties.AutomationId="TitleBar.FpsCounter"
                              IsVisible="{Binding AppBehavior.IsTitleBarFpsVisible}"
@@ -104,6 +112,7 @@
     <Grid Grid.Row="1" ColumnDefinitions="220,*" ClipToBounds="True">
       <Border AutomationProperties.AutomationId="Sidebar.Root"
               Classes="sidebar-shadow"
+              Classes.divider-hidden="{Binding !Theme.IsSidebarDividerVisible}"
               Padding="12,24,12,20"
               Background="Transparent">
         <Grid RowDefinitions="Auto,*,Auto">

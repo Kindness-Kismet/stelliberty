@@ -48,6 +48,24 @@ public sealed class SettingsThemeViewModel : ViewModelBase, IDisposable
 
     public string WindowEffectSectionTitle => _localization.GetString("Settings.Field.WindowEffect");
 
+    public string SidebarDividerText => _localization.GetString("Settings.Field.SidebarDivider");
+
+    public bool IsSidebarDividerVisible
+    {
+        get => _settings.IsSidebarDividerVisible;
+        set
+        {
+            if (_settings.IsSidebarDividerVisible == value)
+            {
+                return;
+            }
+
+            _settings.IsSidebarDividerVisible = value;
+            _settingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
     public IReadOnlyList<SelectionOption<AppTheme>> Options =>
     [
         new(AppTheme.System, _localization.GetString("Theme.Option.System")),
@@ -224,6 +242,7 @@ public sealed class SettingsThemeViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(FieldLabelText));
         OnPropertyChanged(nameof(AccentColorSectionTitle));
         OnPropertyChanged(nameof(WindowEffectSectionTitle));
+        OnPropertyChanged(nameof(SidebarDividerText));
         OnPropertyChanged(nameof(Options));
         OnPropertyChanged(nameof(SelectedOption));
         OnPropertyChanged(nameof(AccentModeOptions));

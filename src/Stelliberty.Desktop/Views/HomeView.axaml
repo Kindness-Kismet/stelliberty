@@ -171,15 +171,15 @@
             </Grid>
             <Border Grid.Row="1" Margin="0,14,0,0" Classes="segment-track">
               <Grid ColumnDefinitions="*,*,*">
-                <Button Grid.Column="0" Classes="segment" Classes.selected="{Binding IsRuleOutboundSelected}"
+                <Button Grid.Column="0" Classes="segment" Classes.selected="{Binding IsRuleOutboundSelected}" Classes.pending="{Binding IsRuleOutboundPending}"
                         AutomationProperties.AutomationId="Home.Outbound.RuleButton"
                         IsEnabled="{Binding IsCoreInteractive}"
                         Command="{Binding SetRuleOutboundCommand}" Content="{loc:Loc Home.Outbound.Rule}" />
-                <Button Grid.Column="1" Classes="segment" Classes.selected="{Binding IsGlobalOutboundSelected}"
+                <Button Grid.Column="1" Classes="segment" Classes.selected="{Binding IsGlobalOutboundSelected}" Classes.pending="{Binding IsGlobalOutboundPending}"
                         AutomationProperties.AutomationId="Home.Outbound.GlobalButton"
                         IsEnabled="{Binding IsCoreInteractive}"
                         Command="{Binding SetGlobalOutboundCommand}" Content="{loc:Loc Home.Outbound.Global}" />
-                <Button Grid.Column="2" Classes="segment" Classes.selected="{Binding IsDirectOutboundSelected}"
+                <Button Grid.Column="2" Classes="segment" Classes.selected="{Binding IsDirectOutboundSelected}" Classes.pending="{Binding IsDirectOutboundPending}"
                         AutomationProperties.AutomationId="Home.Outbound.DirectButton"
                         IsEnabled="{Binding IsCoreInteractive}"
                         Command="{Binding SetDirectOutboundCommand}" Content="{loc:Loc Home.Outbound.Direct}" />
