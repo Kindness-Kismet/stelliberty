@@ -2,6 +2,7 @@ using System.Text;
 using Stelliberty.Application.Subscriptions;
 using Stelliberty.Domain.Subscriptions;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 using DomainSubscription = Stelliberty.Domain.Subscriptions.Subscription;
 
 namespace Stelliberty.Subscription.Tests;
@@ -127,6 +128,83 @@ public sealed class SubscriptionBusinessTests
         Assert.Contains("congestion-controller: bbr", converted, StringComparison.Ordinal);
         Assert.Contains("udp-relay-mode: native", converted, StringComparison.Ordinal);
         Assert.Contains("MATCH,PROXY", converted, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "Content normalizer removes IPv6 URI brackets from proxy server addresses")]
+    [InlineData("vless://11111111-1111-1111-1111-111111111111@[2001:db8::1]:8443#IPv6%20Node", "vless", 8443)]
+    [InlineData("vmess://11111111-1111-1111-1111-111111111111@[2001:db8::1]:8443#IPv6%20Node", "vmess", 8443)]
+    [InlineData("trojan://secret@[2001:db8::1]:8443#IPv6%20Node", "trojan", 8443)]
+    [InlineData("hysteria2://secret@[2001:db8::1]:8443#IPv6%20Node", "hysteria2", 8443)]
+    [InlineData("hy2://secret@[2001:db8::1]:8443#IPv6%20Node", "hysteria2", 8443)]
+    [InlineData("hysteria://secret@[2001:db8::1]:8443#IPv6%20Node", "hysteria", 8443)]
+    [InlineData("tuic://11111111-1111-1111-1111-111111111111:secret@[2001:db8::1]:8443#IPv6%20Node", "tuic", 8443)]
+    [InlineData("http://user:secret@[2001:db8::1]:8080#IPv6%20Node", "http", 8080)]
+    [InlineData("https://user:secret@[2001:db8::1]:8443#IPv6%20Node", "http", 8443)]
+    [InlineData("socks://user:secret@[2001:db8::1]:1080#IPv6%20Node", "socks5", 1080)]
+    [InlineData("socks5://user:secret@[2001:db8::1]:1080#IPv6%20Node", "socks5", 1080)]
+    [InlineData("ss://aes-128-gcm:secret@[2001:db8::1]:8388#IPv6%20Node", "ss", 8388)]
+    public void ContentNormalizerRemovesIpv6UriBracketsFromProxyServerAddresses(string link, string expectedType, int expectedPort)
+    {
+        var normalizer = new SubscriptionContentNormalizer();
+
+        foreach (var content in new[] { link, Base64UrlNoPadding(link) })
+        {
+            var proxy = ParseSingleProxy(normalizer.Normalize(content));
+
+            Assert.Equal("2001:db8::1", proxy.Children[new YamlScalarNode("server")].ToString());
+            Assert.Equal(expectedType, proxy.Children[new YamlScalarNode("type")].ToString());
+            Assert.Equal(expectedPort.ToString(), proxy.Children[new YamlScalarNode("port")].ToString());
+            Assert.Equal("IPv6 Node", proxy.Children[new YamlScalarNode("name")].ToString());
+        }
+    }
+
+    [Theory(DisplayName = "Content normalizer converts IPv6 Shadowsocks links with either base64 format")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ContentNormalizerConvertsIpv6ShadowsocksLinksWithEitherBase64Format(bool encodeFullAuthority)
+    {
+        var authority = encodeFullAuthority
+            ? Base64UrlNoPadding("aes-128-gcm:secret@[2001:db8::1]:8388")
+            : $"{Base64UrlNoPadding("aes-128-gcm:secret")}@[2001:db8::1]:8388";
+        var proxy = ParseSingleProxy(new SubscriptionContentNormalizer().Normalize($"ss://{authority}#IPv6%20Node"));
+
+        Assert.Equal("2001:db8::1", proxy.Children[new YamlScalarNode("server")].ToString());
+        Assert.Equal("8388", proxy.Children[new YamlScalarNode("port")].ToString());
+        Assert.Equal("aes-128-gcm", proxy.Children[new YamlScalarNode("cipher")].ToString());
+        Assert.Equal("secret", proxy.Children[new YamlScalarNode("password")].ToString());
+    }
+
+    [Theory(DisplayName = "Content normalizer preserves domain and IPv4 proxy server addresses")]
+    [InlineData("proxy.example")]
+    [InlineData("127.0.0.1")]
+    [InlineData("例子.测试")]
+    public void ContentNormalizerPreservesDomainAndIpv4ProxyServerAddresses(string host)
+    {
+        var proxy = ParseSingleProxy(new SubscriptionContentNormalizer().Normalize($"http://{host}:8080#Control"));
+
+        Assert.Equal(host, proxy.Children[new YamlScalarNode("server")].ToString());
+        Assert.Equal("8080", proxy.Children[new YamlScalarNode("port")].ToString());
+    }
+
+    [Fact(DisplayName = "Content normalizer preserves bare IPv6 addresses in VMess JSON links")]
+    public void ContentNormalizerPreservesBareIpv6AddressesInVmessJsonLinks()
+    {
+        const string vmessJson = """
+            {"ps":"IPv6","add":"2001:db8::1","port":"443","id":"11111111-1111-1111-1111-111111111111","net":"tcp"}
+            """;
+        var proxy = ParseSingleProxy(new SubscriptionContentNormalizer().Normalize($"vmess://{Base64UrlNoPadding(vmessJson)}"));
+
+        Assert.Equal("2001:db8::1", proxy.Children[new YamlScalarNode("server")].ToString());
+        Assert.Equal("vmess", proxy.Children[new YamlScalarNode("type")].ToString());
+    }
+
+    private static YamlMappingNode ParseSingleProxy(string content)
+    {
+        var stream = new YamlStream();
+        stream.Load(new StringReader(content));
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(stream.Documents).RootNode);
+        var proxies = Assert.IsType<YamlSequenceNode>(root.Children[new YamlScalarNode("proxies")]);
+        return Assert.IsType<YamlMappingNode>(Assert.Single(proxies.Children));
     }
 
     private static DomainSubscription Subscription(string id, bool isLocal = false)
