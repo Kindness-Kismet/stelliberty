@@ -1,6 +1,7 @@
 #if DEBUG
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
@@ -10,6 +11,8 @@ namespace Stelliberty.Desktop.Debug;
 
 internal static partial class DebugCommands
 {
+    private static WindowAppearanceProbe? _appearanceProbe;
+
     private static bool IsAppCommand(string command)
     {
         return string.Equals(command, "screenshot.take", StringComparison.OrdinalIgnoreCase)
@@ -23,12 +26,38 @@ internal static partial class DebugCommands
             || string.Equals(command, "window.restore", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.close", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.show", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.appearance.state", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "window.appearance.stop", StringComparison.OrdinalIgnoreCase)
+            || command.StartsWith("window.appearance.probe ", StringComparison.OrdinalIgnoreCase)
             || command.StartsWith("window.move ", StringComparison.OrdinalIgnoreCase)
             || command.StartsWith("window.resize ", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<string?> ExecuteAppCommandAsync(MainWindow window, string command)
     {
+        if (string.Equals(command, "window.appearance.state", StringComparison.OrdinalIgnoreCase))
+        {
+            return JsonSerializer.Serialize(WindowAppearanceProbe.Capture(window));
+        }
+
+        if (string.Equals(command, "window.appearance.stop", StringComparison.OrdinalIgnoreCase))
+        {
+            return _appearanceProbe?.Stop() ?? throw new InvalidOperationException("No appearance probe has started");
+        }
+
+        if (command.StartsWith("window.appearance.probe ", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!int.TryParse(command["window.appearance.probe ".Length..], out var durationMs)
+                || durationMs is < 200 or > 300_000)
+            {
+                throw new InvalidOperationException("Appearance probe duration must be 200..300000 ms");
+            }
+
+            _appearanceProbe?.Stop("replaced");
+            _appearanceProbe = new WindowAppearanceProbe(window, durationMs);
+            return "started";
+        }
+
         if (string.Equals(command, "screenshot.take", StringComparison.OrdinalIgnoreCase))
         {
             WindowScreenshot.Save(window);
