@@ -22,7 +22,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "Hysteria2" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "hysteria2");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : 443).ToString());
         Set(proxy, "password", Uri.UnescapeDataString(uri.UserInfo));
         Set(proxy, "skip-cert-verify", BoolQuery(query, "insecure") ? "true" : "false");
@@ -47,7 +47,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "Hysteria" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "hysteria");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : 443).ToString());
         SetIfNotBlank(proxy, "auth", Uri.UnescapeDataString(uri.UserInfo));
         SetIfNotBlank(proxy, "auth-str", query.GetValueOrDefault("auth", string.Empty));
@@ -73,7 +73,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "TUIC" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "tuic");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : 443).ToString());
         Set(proxy, "udp", "true");
         if (passwordSeparatorIndex >= 0)
@@ -105,7 +105,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "HTTP" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "http");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : uri.Scheme == "https" ? 443 : 80).ToString());
         if (!string.IsNullOrWhiteSpace(uri.UserInfo))
         {
@@ -135,7 +135,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "SOCKS5" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "socks5");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : 1080).ToString());
         Set(proxy, "udp", "true");
         if (!string.IsNullOrWhiteSpace(uri.UserInfo))
@@ -189,7 +189,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "VLESS" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "vless");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : 443).ToString());
         Set(proxy, "uuid", Uri.UnescapeDataString(uri.UserInfo));
         Set(proxy, "network", network);
@@ -232,7 +232,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "Trojan" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "trojan");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : 443).ToString());
         Set(proxy, "password", Uri.UnescapeDataString(uri.UserInfo));
         Set(proxy, "udp", "true");
@@ -330,7 +330,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", string.IsNullOrWhiteSpace(uri.Fragment) ? "VMess" : Uri.UnescapeDataString(uri.Fragment[1..]));
         Set(proxy, "type", "vmess");
-        Set(proxy, "server", uri.Host);
+        Set(proxy, "server", uri.DnsSafeHost);
         Set(proxy, "port", (uri.Port > 0 ? uri.Port : 443).ToString());
         Set(proxy, "uuid", Uri.UnescapeDataString(uri.UserInfo));
         Set(proxy, "alterId", "0");
@@ -388,7 +388,7 @@ public sealed partial class SubscriptionContentNormalizer
         var proxy = new YamlMappingNode();
         Set(proxy, "name", name);
         Set(proxy, "type", "ss");
-        Set(proxy, "server", serverPort[..portSeparatorIndex]);
+        Set(proxy, "server", serverPort[..portSeparatorIndex].Trim('[', ']'));
         Set(proxy, "port", port.ToString());
         Set(proxy, "cipher", authPart[..authSeparatorIndex]);
         Set(proxy, "password", authPart[(authSeparatorIndex + 1)..]);
