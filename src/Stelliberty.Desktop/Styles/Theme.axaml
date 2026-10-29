@@ -13,6 +13,7 @@
       <SolidColorBrush x:Key="AppSurfaceBrush" Color="#CCFFFFFF" />
       <SolidColorBrush x:Key="AppCardBrush" Color="#CCFFFFFF" />
       <SolidColorBrush x:Key="AppSettingsGroupBrush" Color="#CCFFFFFF" />
+      <SolidColorBrush x:Key="AppSettingsGroupTitleBrush" Color="#1F2937" />
 
       <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="#0F172A" />
       <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#475569" />
@@ -58,6 +59,7 @@
       <SolidColorBrush x:Key="AppSurfaceBrush" Color="#44000000" />
       <SolidColorBrush x:Key="AppCardBrush" Color="#44000000" />
       <SolidColorBrush x:Key="AppSettingsGroupBrush" Color="#44000000" />
+      <SolidColorBrush x:Key="AppSettingsGroupTitleBrush" Color="#FAFCFF" />
 
       <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="#F4F4F5" />
       <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#C0C2C7" />

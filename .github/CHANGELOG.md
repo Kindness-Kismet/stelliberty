@@ -1,11 +1,11 @@
-- Fixed an issue with core uptime that previously reset the displayed duration when the interface restarted while the core kept running
-- Fixed an issue with rule conflict validation that previously blocked unrelated rule additions and edits after a subscription update introduced a conflict
-- Fixed an issue with custom rule enabled states that previously re-enabled disabled rules during editing and left toggles inconsistent after rejected saves
-- Fixed an issue with macOS TUN service privileges and interface naming that previously prevented TUN from starting; existing installations need to install or update service mode
+- Improved acrylic window backgrounds and settings section headings, which now combine more transparent surfaces with clearer text and preserve the active material when pages are recreated
+- Changed how card backgrounds look in dark acrylic mode; they now use 80% opacity
+- Fixed an issue with UWP loopback exemption management that previously prevented app enumeration under certain permission conditions or overwrote existing exemptions after incomplete reads
+- Fixed an issue with IPv6 subscription links that previously retained brackets in server addresses and prevented affected nodes from connecting
 
 ---
 
-- 修复了关于核心运行时长的错误，该问题曾导致核心仍在运行时，重启界面却让显示时长归零
-- 修复了关于规则冲突校验的错误，该问题曾导致订阅更新产生旧规则冲突后，无关规则也无法添加或编辑
-- 修复了关于自定义规则启用状态的错误，该问题曾导致编辑时重新启用已禁用规则，保存被拒绝后开关状态也与实际结果不一致
-- 修复了关于 macOS TUN 服务权限和网卡命名的错误，该问题曾导致 TUN 无法启动；已有安装需要重新安装或更新服务模式
+- 对亚克力窗口背景和设置分组标题进行了改善，这使得背景更通透、分组标题更清楚，页面重建时也能保持当前材质
+- 调整了深色亚克力模式下的卡片背景，现在采用 80% 不透明度
+- 修复了关于 UWP 回环豁免管理的错误，该问题曾导致部分权限条件下无法列出应用，或在读取不完整后覆盖现有豁免
+- 修复了关于 IPv6 订阅链接的错误，该问题曾导致服务器地址保留方括号，使相关节点无法连接

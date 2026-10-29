@@ -58,7 +58,7 @@ public sealed class SettingsSystemIntegrationViewModel : ViewModelBase, IDisposa
         CloseUwpLoopbackDialogCommand = new RelayCommand(CloseUwpLoopbackDialog);
         SelectAllUwpCommand = new RelayCommand(SelectAllUwp);
         InvertUwpSelectionCommand = new RelayCommand(InvertUwpSelection);
-        SaveUwpLoopbackCommand = new RelayCommand(SaveUwpLoopback);
+        SaveUwpLoopbackCommand = new RelayCommand(SaveUwpLoopback, CanSaveUwpLoopback);
         RefreshSystemProxyHostCandidatesCommand = new RelayCommand(RefreshSystemProxyHostCandidates);
         RestoreDefaultPacScriptCommand = new RelayCommand(RestoreDefaultPacScript);
         RestoreDefaultSystemProxyBypassCommand = new RelayCommand(RestoreDefaultSystemProxyBypass);
@@ -242,6 +242,7 @@ public sealed class SettingsSystemIntegrationViewModel : ViewModelBase, IDisposa
         _isDisposed = true;
         _uwpLoadRequestId++;
         _localization.LanguageChanged -= OnLanguageChanged;
+        ((RelayCommand)SaveUwpLoopbackCommand).RaiseCanExecuteChanged();
     }
 
     private void SetPacModeEnabled(bool isEnabled)
@@ -347,6 +348,7 @@ public sealed class SettingsSystemIntegrationViewModel : ViewModelBase, IDisposa
         UwpLoopbackStatusText = _localization.GetString("Settings.System.UwpLoopback.Loading");
         IsUwpLoopbackDialogVisible = true;
         OnPropertyChanged(nameof(IsUwpLoopbackStatusVisible));
+        ((RelayCommand)SaveUwpLoopbackCommand).RaiseCanExecuteChanged();
 
         var requestId = ++_uwpLoadRequestId;
         _ = Task.Run(() =>
@@ -366,6 +368,7 @@ public sealed class SettingsSystemIntegrationViewModel : ViewModelBase, IDisposa
     {
         _uwpLoadRequestId++;
         IsUwpLoopbackDialogVisible = false;
+        ((RelayCommand)SaveUwpLoopbackCommand).RaiseCanExecuteChanged();
     }
 
     // 枚举结果回到 UI 线程；取消后直接丢弃。
@@ -381,6 +384,7 @@ public sealed class SettingsSystemIntegrationViewModel : ViewModelBase, IDisposa
         ApplyUwpFilter();
         UwpLoopbackStatusText = _allUwpItems.Count == 0 ? _localization.GetString("Settings.System.UwpLoopback.Empty") : string.Empty;
         OnPropertyChanged(nameof(IsUwpLoopbackStatusVisible));
+        ((RelayCommand)SaveUwpLoopbackCommand).RaiseCanExecuteChanged();
     }
 
     private void Post(Action action)
@@ -420,9 +424,16 @@ public sealed class SettingsSystemIntegrationViewModel : ViewModelBase, IDisposa
         }
     }
 
+    private bool CanSaveUwpLoopback()
+    {
+        // 空的完整列表不能代表清空豁免。
+        return !_isDisposed && IsUwpLoopbackDialogVisible && _allUwpItems.Count > 0;
+    }
+
     private void SaveUwpLoopback()
     {
-        if (_uwpLoopbackService is null)
+        // 直接执行命令不会检查 CanExecute，保存入口须再次验证。
+        if (_uwpLoopbackService is null || !CanSaveUwpLoopback())
         {
             return;
         }

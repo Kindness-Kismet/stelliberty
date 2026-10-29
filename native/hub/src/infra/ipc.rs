@@ -8,9 +8,7 @@ use interprocess::local_socket::{GenericFilePath, ToFsName};
 #[cfg(windows)]
 use interprocess::local_socket::{GenericNamespaced, ToNsName};
 use interprocess::local_socket::{
-    ListenerOptions,
-    tokio::Stream as TokioIpcStream,
-    traits::tokio::{Listener as TokioListenerExt, Stream as TokioStreamExt},
+    ListenerOptions, tokio::Stream as TokioIpcStream, traits::tokio::Listener as TokioListenerExt,
 };
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -174,10 +172,10 @@ async fn handle_connection(
     handler: Arc<dyn MethodHandler>,
     event_tx: broadcast::Sender<Outgoing>,
 ) -> Result<()> {
-    let (reader, writer) = stream.split();
-    let mut reader = BufReader::new(reader);
-    // 事件和请求响应共用 writer，锁保证单连接内写入顺序。
-    let writer = Arc::new(Mutex::new(writer));
+    let stream = Arc::new(stream);
+    let mut reader = BufReader::new(stream.as_ref());
+    // 读取通过共享引用进行；写锁保证事件与响应不会交错。
+    let writer = Arc::new(Mutex::new(stream.clone()));
     let mut event_rx = event_tx.subscribe();
 
     let writer_for_events = writer.clone();
@@ -187,7 +185,8 @@ async fn handle_connection(
             let Ok(line) = serde_json::to_string(&ev) else {
                 continue;
             };
-            let mut w = writer_for_events.lock().await;
+            let stream = writer_for_events.lock().await;
+            let mut w = stream.as_ref();
             if w.write_all(line.as_bytes()).await.is_err() {
                 break;
             }
@@ -234,7 +233,8 @@ async fn handle_connection(
                     Err(error) => Outgoing::Error { id, error },
                 };
                 if let Ok(s) = serde_json::to_string(&outgoing) {
-                    let mut w = writer_cl.lock().await;
+                    let stream = writer_cl.lock().await;
+                    let mut w = stream.as_ref();
                     let _ = w.write_all(s.as_bytes()).await;
                     let _ = w.write_all(b"\n").await;
                 }

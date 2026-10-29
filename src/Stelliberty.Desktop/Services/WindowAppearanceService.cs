@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Stelliberty.Application.Diagnostics;
 using Stelliberty.Application.Settings;
 using Stelliberty.Presentation.ViewModels;
 
@@ -133,16 +134,22 @@ internal sealed class WindowAppearanceService : IDisposable
             return;
         }
 
-        _window.TransparencyLevelHint = effect switch
+        var transparencyLevel = effect switch
         {
-            WindowEffect.Mica => [WindowTransparencyLevel.Mica],
-            WindowEffect.Acrylic => [WindowTransparencyLevel.AcrylicBlur],
+            WindowEffect.Mica => WindowTransparencyLevel.Mica,
+            WindowEffect.Acrylic => WindowTransparencyLevel.AcrylicBlur,
             // macOS 后端只把 AcrylicBlur 接到 NSVisualEffectView 模糊。
-            WindowEffect.Blur => [WindowTransparencyLevel.AcrylicBlur],
-            _ => [WindowTransparencyLevel.None]
+            WindowEffect.Blur => WindowTransparencyLevel.AcrylicBlur,
+            _ => WindowTransparencyLevel.None
         };
+        // 同一材质不重新提交，页面重建与热重载只刷新表面资源。
+        if (_window.TransparencyLevelHint.Count != 1 || _window.TransparencyLevelHint[0] != transparencyLevel)
+        {
+            _window.TransparencyLevelHint = [transparencyLevel];
+        }
 
         UpdateRootSurfaceForCurrentEffect(IsCurrentLightTheme());
+        AppLogger.Info($"Window effect applied: requested={effect} actual={_window.ActualTransparencyLevel} theme={_window.ActualThemeVariant}");
     }
 
     private bool IsCurrentLightTheme()
@@ -177,11 +184,29 @@ internal sealed class WindowAppearanceService : IDisposable
                 isLightTheme
                     ? _isWindowActive ? "#A0FFFFFF" : "#FFEEEEEE"
                     : _isWindowActive ? "#A0000000" : "#FF242424")),
-            WindowEffect.Acrylic or WindowEffect.Blur => new SolidColorBrush(Color.Parse(isLightTheme ? "#B3FFFFFF" : "#B3212121")),
+            // Zen 工具栏使用冷灰/近黑底色和 60% 不透明度。
+            WindowEffect.Acrylic => new SolidColorBrush(Color.Parse(isLightTheme ? "#99F0F0F4" : "#9917171A")),
+            WindowEffect.Blur => new SolidColorBrush(Color.Parse(isLightTheme ? "#B3FFFFFF" : "#B3212121")),
             _ => (IBrush)Brushes.Transparent
         };
         // 这里只处理窗口效果背景；其余样式归 Theme.axaml。
         _window.Resources["AppRootSurfaceBrush"] = rootSurfaceBrush;
+        var acrylicCardBrush = effect == WindowEffect.Acrylic && !isLightTheme
+            ? new SolidColorBrush(Color.Parse("#CC000000"))
+            : null;
+        // 深色亚克力卡片使用 80% 不透明度；其他组合移除覆盖，交回主题资源。
+        foreach (var resourceKey in new[] { "AppSurfaceBrush", "AppCardBrush", "AppSettingsGroupBrush" })
+        {
+            if (acrylicCardBrush is not null)
+            {
+                _window.Resources[resourceKey] = acrylicCardBrush;
+            }
+            else
+            {
+                _window.Resources.Remove(resourceKey);
+            }
+        }
+
         _window.Resources["AppDialogSurfaceBrush"] = surfaceBrush;
         _window.Resources["AppPopupSurfaceBrush"] = surfaceBrush;
         _window.Resources["ComboBoxPopupBackground"] = surfaceBrush;

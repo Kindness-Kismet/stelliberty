@@ -12,6 +12,8 @@ public sealed class WindowsUwpLoopbackService : IUwpLoopbackService
     private const uint ForceComputeBinariesFlag = 1;
     private const uint AccessDenied = 5;
     private const uint HResultAccessDenied = 0x80070005;
+    private const uint BadImpersonationLevel = 1346;
+    private const uint HResultBadImpersonationLevel = 0x80070542;
     private const int DebugLogLimit = 10;
 
     public IReadOnlyList<UwpLoopbackPackage> LoadPackages()
@@ -142,13 +144,14 @@ public sealed class WindowsUwpLoopbackService : IUwpLoopbackService
         try
         {
             var count = TryEnumAppContainers(out containers);
+            // 没有可枚举应用时，也不能丢弃现有豁免。
+            var loopbackSids = ReadCurrentLoopbackSids();
             if (count == 0 || containers == IntPtr.Zero)
             {
                 AppLogger.Warning("No UWP app container was found");
-                return new UwpLoopbackSnapshot([], []);
+                return new UwpLoopbackSnapshot([], loopbackSids);
             }
 
-            var loopbackSids = ReadCurrentLoopbackSids();
             var loopbackSidSet = new HashSet<byte[]>(loopbackSids, ByteArrayComparer.Instance);
             var packages = ReadAppContainers(containers, count, loopbackSidSet);
             return new UwpLoopbackSnapshot(packages, loopbackSids);
@@ -173,10 +176,11 @@ public sealed class WindowsUwpLoopbackService : IUwpLoopbackService
                 return count;
             }
 
-            var isAccessDenied = result is AccessDenied or HResultAccessDenied;
-            if (flag != 0 && isAccessDenied)
+            // 二进制信息计算受权限或模拟级别限制时，仍可尝试基础枚举。
+            var canUseBasicEnumeration = result is AccessDenied or HResultAccessDenied or BadImpersonationLevel or HResultBadImpersonationLevel;
+            if (flag != 0 && canUseBasicEnumeration)
             {
-                AppLogger.Warning("Full UWP app container enumeration was denied; falling back to basic enumeration");
+                AppLogger.Warning($"Full UWP app container enumeration failed; falling back to basic enumeration: {BuildNetworkIsolationErrorMessage("NetworkIsolationEnumAppContainers", result)}");
                 continue;
             }
 
@@ -193,34 +197,40 @@ public sealed class WindowsUwpLoopbackService : IUwpLoopbackService
         var result = NetworkIsolationGetAppContainerConfig(out var count, out var sids);
         if (result != 0)
         {
-            AppLogger.Warning($"UWP loopback configuration read failed; treating it as empty: {BuildNetworkIsolationErrorMessage("NetworkIsolationGetAppContainerConfig", result)}");
-            return [];
-        }
-
-        if (count == 0 || sids == IntPtr.Zero)
-        {
-            return [];
+            // 读取失败不能代表空配置，否则保存会覆盖现有豁免。
+            throw new InvalidOperationException(BuildNetworkIsolationErrorMessage("NetworkIsolationGetAppContainerConfig", result));
         }
 
         try
         {
+            if (count == 0)
+            {
+                return [];
+            }
+
+            if (sids == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("NetworkIsolationGetAppContainerConfig returned no SID buffer for a non-empty configuration");
+            }
+
             var sidSize = Marshal.SizeOf<SidAndAttributes>();
             var resultSids = new List<byte[]>((int)count);
             for (var index = 0; index < count; index++)
             {
                 var item = Marshal.PtrToStructure<SidAndAttributes>(IntPtr.Add(sids, index * sidSize));
-                var sidBytes = CopySidBytes(item.Sid);
-                if (sidBytes is not null)
-                {
-                    resultSids.Add(sidBytes);
-                }
+                var sidBytes = CopySidBytes(item.Sid)
+                    ?? throw new InvalidOperationException("UWP loopback configuration contains an invalid SID");
+                resultSids.Add(sidBytes);
             }
 
             return resultSids;
         }
         finally
         {
-            LocalFree(sids);
+            if (sids != IntPtr.Zero)
+            {
+                LocalFree(sids);
+            }
         }
     }
 
@@ -355,6 +365,7 @@ public sealed class WindowsUwpLoopbackService : IUwpLoopbackService
         return errorCode switch
         {
             AccessDenied or HResultAccessDenied => "Insufficient permissions, usually requiring administrator rights or a system-protected target",
+            BadImpersonationLevel or HResultBadImpersonationLevel => "Required impersonation level was not provided or is invalid",
             0x80070057 or 87 => "Invalid argument, usually caused by SID configuration that does not meet system requirements",
             0x80004005 => "System restriction or low-level component refused the operation",
             0x00000490 => "Target container or configuration entry was not found",
