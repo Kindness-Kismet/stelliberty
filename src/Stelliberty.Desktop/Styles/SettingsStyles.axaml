@@ -34,7 +34,8 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="LetterSpacing" Value="1" />
-    <Setter Property="Foreground" Value="{DynamicResource AppTextTertiaryBrush}" />
+    <!-- 分组标题直接叠在窗口材质上，使用独立高对比度文字色。 -->
+    <Setter Property="Foreground" Value="{DynamicResource AppSettingsGroupTitleBrush}" />
     <Setter Property="Margin" Value="8,8,0,10" />
   </Style>
 
