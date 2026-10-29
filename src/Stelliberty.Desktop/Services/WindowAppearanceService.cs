@@ -191,6 +191,22 @@ internal sealed class WindowAppearanceService : IDisposable
         };
         // 这里只处理窗口效果背景；其余样式归 Theme.axaml。
         _window.Resources["AppRootSurfaceBrush"] = rootSurfaceBrush;
+        var acrylicCardBrush = effect == WindowEffect.Acrylic && !isLightTheme
+            ? new SolidColorBrush(Color.Parse("#CC000000"))
+            : null;
+        // 深色亚克力卡片使用 80% 不透明度；其他组合移除覆盖，交回主题资源。
+        foreach (var resourceKey in new[] { "AppSurfaceBrush", "AppCardBrush", "AppSettingsGroupBrush" })
+        {
+            if (acrylicCardBrush is not null)
+            {
+                _window.Resources[resourceKey] = acrylicCardBrush;
+            }
+            else
+            {
+                _window.Resources.Remove(resourceKey);
+            }
+        }
+
         _window.Resources["AppDialogSurfaceBrush"] = surfaceBrush;
         _window.Resources["AppPopupSurfaceBrush"] = surfaceBrush;
         _window.Resources["ComboBoxPopupBackground"] = surfaceBrush;
