@@ -184,9 +184,8 @@ internal sealed class WindowAppearanceService : IDisposable
                 isLightTheme
                     ? _isWindowActive ? "#A0FFFFFF" : "#FFEEEEEE"
                     : _isWindowActive ? "#A0000000" : "#FF242424")),
-            // Zen 工具栏使用冷灰/近黑底色和 60% 不透明度。
-            WindowEffect.Acrylic => new SolidColorBrush(Color.Parse(isLightTheme ? "#99F0F0F4" : "#9917171A")),
-            WindowEffect.Blur => new SolidColorBrush(Color.Parse(isLightTheme ? "#B3FFFFFF" : "#B3212121")),
+            // 底色保持约 70% 不透明度，减少桌面内容对文字对比度的影响。
+            WindowEffect.Acrylic or WindowEffect.Blur => new SolidColorBrush(Color.Parse(isLightTheme ? "#B3FFFFFF" : "#B3212121")),
             _ => (IBrush)Brushes.Transparent
         };
         // 这里只处理窗口效果背景；其余样式归 Theme.axaml。
