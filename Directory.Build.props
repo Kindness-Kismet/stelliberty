@@ -11,7 +11,7 @@
   <PropertyGroup>
     <AppName>stelliberty</AppName>
     <AppDisplayName>Stelliberty</AppDisplayName>
-    <AppVersion>2.0.38</AppVersion>
+    <AppVersion>2.0.39</AppVersion>
     <AppPipePrefix>stelliberty</AppPipePrefix>
   </PropertyGroup>
 
