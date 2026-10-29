@@ -111,8 +111,7 @@ impl CoreApiClient {
         path: &str,
         body: Option<String>,
     ) -> Result<(u16, String)> {
-        let stream = self.connect_stream().await?;
-        let (reader, mut writer) = stream.split();
+        let mut stream = self.connect_stream().await?;
 
         // 请求强制 Connection: close；无长度响应读取到 EOF。
         let mut request =
@@ -134,14 +133,14 @@ impl CoreApiClient {
         }
 
         let request_total = tokio::time::timeout(Duration::from_secs(5), async {
-            writer.write_all(request.as_bytes()).await?;
-            writer.flush().await
+            stream.write_all(request.as_bytes()).await?;
+            stream.flush().await
         })
         .await
         .context("Timed out writing mihomo HTTP request")?;
         request_total.context("Failed to write mihomo HTTP request")?;
 
-        let mut reader = BufReader::new(reader);
+        let mut reader = BufReader::new(stream);
 
         let mut status_line = String::new();
         tokio::time::timeout(Duration::from_secs(5), reader.read_line(&mut status_line))
