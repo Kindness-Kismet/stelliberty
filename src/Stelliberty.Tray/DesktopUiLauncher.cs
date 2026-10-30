@@ -54,6 +54,7 @@ internal sealed class DesktopUiLauncher : IDesktopUiLauncher, IAsyncDisposable
             startInfo.ArgumentList.Add("--tray-session");
             startInfo.ArgumentList.Add(sessionToken);
             _process = _processStarter.Start(startInfo);
+            ForegroundActivation.AllowForProcess(_process.Id);
         }
         finally
         {

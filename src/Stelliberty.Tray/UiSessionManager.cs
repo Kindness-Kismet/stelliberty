@@ -25,13 +25,13 @@ internal sealed class UiSessionManager(
 
     public async Task<UiActivateResult> ActivateAsync(CancellationToken cancellationToken)
     {
-        IUiSessionConnection? activeConnection;
+        UiSession? activeSession;
         string? launchToken = null;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            activeConnection = _activeSession?.Connection;
-            if (activeConnection is null)
+            activeSession = _activeSession;
+            if (activeSession is null)
             {
                 if (_pendingToken is not null && _timeProvider.GetUtcNow() < _pendingUntil)
                 {
@@ -48,16 +48,17 @@ internal sealed class UiSessionManager(
             _gate.Release();
         }
 
-        if (activeConnection is not null)
+        if (activeSession is not null)
         {
             try
             {
-                await activeConnection.RequestActivationAsync(cancellationToken).ConfigureAwait(false);
+                ForegroundActivation.AllowForProcess(activeSession.UiPid);
+                await activeSession.Connection.RequestActivationAsync(cancellationToken).ConfigureAwait(false);
                 return new UiActivateResult(false, true, false);
             }
             catch (Exception exception) when (exception is IOException or ObjectDisposedException)
             {
-                await OnConnectionClosedAsync(activeConnection.Id).ConfigureAwait(false);
+                await OnConnectionClosedAsync(activeSession.Connection.Id).ConfigureAwait(false);
                 return await ActivateAsync(cancellationToken).ConfigureAwait(false);
             }
         }
@@ -76,30 +77,31 @@ internal sealed class UiSessionManager(
 
     public async Task<UiActivateResult> ToggleAsync(CancellationToken cancellationToken)
     {
-        IUiSessionConnection? activeConnection;
+        UiSession? activeSession;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            activeConnection = _activeSession?.Connection;
+            activeSession = _activeSession;
         }
         finally
         {
             _gate.Release();
         }
 
-        if (activeConnection is null)
+        if (activeSession is null)
         {
             return await ActivateAsync(cancellationToken).ConfigureAwait(false);
         }
 
         try
         {
-            await activeConnection.RequestToggleAsync(cancellationToken).ConfigureAwait(false);
+            ForegroundActivation.AllowForProcess(activeSession.UiPid);
+            await activeSession.Connection.RequestToggleAsync(cancellationToken).ConfigureAwait(false);
             return new UiActivateResult(false, true, false);
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
-            await OnConnectionClosedAsync(activeConnection.Id).ConfigureAwait(false);
+            await OnConnectionClosedAsync(activeSession.Connection.Id).ConfigureAwait(false);
             return await ActivateAsync(cancellationToken).ConfigureAwait(false);
         }
     }

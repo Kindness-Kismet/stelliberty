@@ -156,6 +156,7 @@ internal static partial class DebugCommands
         return string.Join(
             ';',
             $"visible={window.IsVisible.ToString().ToLowerInvariant()}",
+            $"active={window.IsActive.ToString().ToLowerInvariant()}",
             $"state={window.WindowState}",
             $"x={window.Position.X}",
             $"y={window.Position.Y}",
