@@ -14,16 +14,16 @@ internal static class AppRuntime
     private static string AppFontFamily => $"avares://{AppRuntimeNames.UiResourceAuthority}/Assets/fonts#Google Sans";
     private static string CjkFontFamily => $"avares://{AppRuntimeNames.UiResourceAuthority}/Assets/fonts#Noto Sans SC";
 
-    public static void RunUi(string[] args)
+    public static void Run(string[] args)
     {
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
-        AppLogger.Info("Desktop UI startup");
+        AppLogger.Info("Desktop startup");
 
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-            AppLogger.Info("Desktop UI shutdown");
+            AppLogger.Info("Desktop shutdown");
         }
         catch (Exception exception)
         {

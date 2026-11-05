@@ -27,7 +27,7 @@ namespace Stelliberty.Desktop;
 
 public sealed partial class MainWindow : Window
 {
-    // 隐藏后统一等待该时长：轻量模式结束 UI 进程，常规模式回收页面视觉树。
+    // 隐藏 60 秒后回收页面视觉树，托盘与核心继续运行。
     private static readonly TimeSpan HiddenReleaseDelay = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan PageLoadingMinVisible = TimeSpan.FromMilliseconds(300);
     private readonly WindowAppearanceService _windowAppearanceService = new();
@@ -45,7 +45,6 @@ public sealed partial class MainWindow : Window
     private AccentColorPickerView? _activeAccentPicker;
     private bool _isShutdownRequested;
     private bool _isShutdownPreparing;
-    private bool _shouldShutdownTray = true;
     private bool _hasOpened;
     private long _pageTransitionVersion;
     private long _pageLoadingShownAt;
@@ -773,12 +772,10 @@ public sealed partial class MainWindow : Window
 
     public void RequestShutdown()
     {
-        BeginShutdown(shouldShutdownTray: true);
-    }
-
-    internal void RequestUiShutdown()
-    {
-        BeginShutdown(shouldShutdownTray: false);
+        if (_isShutdownRequested || _isShutdownPreparing) return;
+        AppLogger.Info("Application exit requested");
+        _isShutdownPreparing = true;
+        _ = PrepareAndShutdownAsync();
     }
 
     internal void HideToBackground()
@@ -792,26 +789,13 @@ public sealed partial class MainWindow : Window
         Hide();
     }
 
-    private void BeginShutdown(bool shouldShutdownTray)
-    {
-        if (_isShutdownRequested || _isShutdownPreparing)
-        {
-            return;
-        }
-
-        _shouldShutdownTray = shouldShutdownTray;
-        AppLogger.Info(shouldShutdownTray ? "Application exit requested" : "Desktop UI exit requested");
-        _isShutdownPreparing = true;
-        _ = PrepareAndShutdownAsync();
-    }
-
     internal Func<Task>? PrepareShutdownAsync { private get; set; }
 
     internal Action? OsShutdownDetected { private get; set; }
 
     internal bool IsShutdownPreparing => _isShutdownPreparing;
 
-    internal bool ShouldShutdownTray => _shouldShutdownTray;
+    internal bool IsShutdownReady => _isShutdownRequested;
 
     internal bool CanExitToBackground { get; set; }
 
@@ -850,8 +834,7 @@ public sealed partial class MainWindow : Window
 
     private async Task PrepareAndShutdownAsync()
     {
-        var scope = _shouldShutdownTray ? "Application" : "Desktop UI";
-        AppLogger.Info($"{scope} exit preparation started");
+        AppLogger.Info("Application exit preparation started");
         try
         {
             if (PrepareShutdownAsync is not null)
@@ -864,7 +847,7 @@ public sealed partial class MainWindow : Window
             AppLogger.Warning($"Application exit preparation failed: {exception.Message}");
         }
 
-        AppLogger.Info($"{scope} exit preparation completed");
+        AppLogger.Info("Application exit preparation completed");
         var desktop = Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
         var requiresExplicitShutdown = desktop?.ShutdownMode == ShutdownMode.OnExplicitShutdown;
         _isShutdownRequested = true;
@@ -991,12 +974,6 @@ public sealed partial class MainWindow : Window
         _hiddenReleaseTimer.Stop();
         if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
         {
-            return;
-        }
-
-        if (DataContext is MainWindowViewModel { AppBehavior.IsLightweightModeEnabled: true })
-        {
-            RequestUiShutdown();
             return;
         }
 

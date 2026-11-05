@@ -38,7 +38,7 @@ public sealed partial class MainWindowViewModel
             logs = [.. _pendingCoreLogs];
             _pendingCoreLogs.Clear();
         }
-        // 托盘历史日志已接收完毕，首批内容无需再等追加日志的节流计时。
+        // 首批日志无需等待追加日志的节流计时。
         CoreLogPage.AppendLogs(logs);
     }
 }

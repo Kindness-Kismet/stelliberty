@@ -4,7 +4,7 @@
 #define MyAppVersion "@APP_VERSION@"
 #define MyAppPublisher "@APP_PUBLISHER@"
 #define MyAppExeName "@APP_EXE_NAME@"
-#define MyAppUiExeName "@APP_UI_EXE_NAME@"
+#define LegacyUiName "@LEGACY_UI_NAME@"
 #define MyAppPackageName "@APP_PACKAGE_NAME@"
 #define MyAppMutex "@APP_MUTEX@"
 #define MyServiceName "@SERVICE_NAME@"
@@ -87,6 +87,19 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "@SOURCE_DIR@\*"; DestDir: "{app}"; Flags: replacesameversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+; 升级时只清理废弃界面宿主的固定文件，保留用户数据。
+Type: files; Name: "{app}\data\deps\{#LegacyUiName}.exe"
+Type: files; Name: "{app}\data\deps\{#LegacyUiName}.dll"
+Type: files; Name: "{app}\data\deps\{#LegacyUiName}.deps.json"
+Type: files; Name: "{app}\data\deps\{#LegacyUiName}.runtimeconfig.json"
+Type: files; Name: "{app}\data\deps\{#LegacyUiName}.pdb"
+Type: files; Name: "{app}\{#LegacyUiName}.exe"
+Type: files; Name: "{app}\{#LegacyUiName}.dll"
+Type: files; Name: "{app}\{#LegacyUiName}.deps.json"
+Type: files; Name: "{app}\{#LegacyUiName}.runtimeconfig.json"
+Type: files; Name: "{app}\{#LegacyUiName}.pdb"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -252,15 +265,17 @@ end;
 procedure StopAppProcessIfNeeded();
 var
   AppProcessPath: String;
-  UiProcessPath: String;
+  LegacyUiProcessPath: String;
+  LegacyRootUiProcessPath: String;
   ScriptPath: String;
   Script: String;
 begin
   AppProcessPath := ExpandConstant('{app}\{#MyAppExeName}');
-  UiProcessPath := ExpandConstant('{app}\{#MyAppUiExeName}');
+  LegacyUiProcessPath := ExpandConstant('{app}\data\deps\{#LegacyUiName}.exe');
+  LegacyRootUiProcessPath := ExpandConstant('{app}\{#LegacyUiName}.exe');
   ScriptPath := ExpandConstant('{tmp}\stop-stelliberty-app.ps1');
   Script :=
-    '$processPaths = @("' + AppProcessPath + '", "' + UiProcessPath + '")' + #13#10 +
+    '$processPaths = @("' + AppProcessPath + '", "' + LegacyUiProcessPath + '", "' + LegacyRootUiProcessPath + '")' + #13#10 +
     'Get-CimInstance Win32_Process |' + #13#10 +
     '  Where-Object { $processPaths -contains $_.ExecutablePath } |' + #13#10 +
     '  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }';

@@ -3,46 +3,39 @@ import os
 import shlex
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 from build_support.models import AppMetadata
-from build_support.paths import BUILD_DIR, DEPS_DIRECTORY
+from build_support.paths import BUILD_DIR, DEPS_DIRECTORY, ROOT
 
 
 def close_running_output_app(metadata: AppMetadata, output_dir: Path) -> None:
-    close_running_binary(output_binary_path(metadata.app_name, output_dir))
+    resolved_output = output_dir.resolve()
+    ensure_build_output_path(resolved_output)
     ui_name = f"{metadata.app_name}_ui"
-    close_running_binary(output_binary_path(ui_name, output_dir / DEPS_DIRECTORY))
-    close_running_binary(output_binary_path(ui_name, output_dir))
-
-
-def close_running_binary(binary_path: Path) -> None:
-    if not binary_path.exists():
-        return
-
-    resolved_binary = binary_path.resolve()
-    ensure_build_output_path(resolved_binary)
-
-    process_ids = running_process_ids(resolved_binary)
+    binary_paths = [
+        output_binary_path(metadata.app_name, resolved_output),
+        output_binary_path(ui_name, resolved_output / DEPS_DIRECTORY),
+        output_binary_path(ui_name, resolved_output),
+    ]
+    process_ids = [
+        process_id
+        for binary_path in binary_paths
+        if binary_path.is_file()
+        for process_id in running_process_ids(binary_path)
+    ]
     if not process_ids:
         return
 
-    for process_id in process_ids:
-        print(f"  Stopping blocking process PID {process_id}: {resolved_binary}", flush=True)
-        terminate_process(process_id, force=False)
+    skill_paths = [ROOT / directory / "skills" / "app-debug" / "scripts" / "cli.py" for directory in (".codex", ".claude")]
+    cli_path = next((path for path in skill_paths if path.is_file()), None)
+    if cli_path is None:
+        raise RuntimeError(f"Close the running output app before building; app-debug is unavailable: {resolved_output}")
 
-    if wait_for_processes_exit(process_ids, timeout_seconds=5):
-        return
-
-    remaining = [process_id for process_id in process_ids if process_exists(process_id)]
-    for process_id in remaining:
-        print(f"  Force-stopping blocking process PID {process_id}: {resolved_binary}", flush=True)
-        terminate_process(process_id, force=True)
-
-    if not wait_for_processes_exit(remaining, timeout_seconds=5):
-        still_running = ", ".join(str(process_id) for process_id in remaining if process_exists(process_id))
-        raise RuntimeError(f"Output is still locked by running processes; build cannot continue: {still_running}")
+    print(f"  Stopping output app through app-debug: {resolved_output}", flush=True)
+    env = os.environ.copy()
+    env["STELLIBERTY_DEBUG_ROOT"] = str(ROOT)
+    subprocess.run([sys.executable, str(cli_path), "app.stop", "--output-dir", str(resolved_output)], cwd=ROOT, env=env, check=True)
 
 
 def output_binary_path(binary_name: str, output_dir: Path) -> Path:
@@ -149,45 +142,3 @@ def running_process_ids_ps(binary_path: Path) -> list[int]:
 def normalized_path(path: Path) -> str:
     resolved = str(path.resolve())
     return resolved.casefold() if sys.platform == "win32" else resolved
-
-
-def terminate_process(process_id: int, force: bool) -> None:
-    if sys.platform == "win32":
-        command = ["taskkill", "/PID", str(process_id), "/T"]
-        if force:
-            command.append("/F")
-        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        return
-
-    try:
-        os.kill(process_id, 9 if force else 15)
-    except ProcessLookupError:
-        return
-
-
-def wait_for_processes_exit(process_ids: list[int], timeout_seconds: float) -> bool:
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if all(not process_exists(process_id) for process_id in process_ids):
-            return True
-        time.sleep(0.1)
-
-    return all(not process_exists(process_id) for process_id in process_ids)
-
-
-def process_exists(process_id: int) -> bool:
-    if sys.platform == "win32":
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", f"Get-Process -Id {process_id} -ErrorAction SilentlyContinue"],
-            text=True,
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
-        return bool(result.stdout.strip())
-
-    try:
-        os.kill(process_id, 0)
-        return True
-    except ProcessLookupError:
-        return False

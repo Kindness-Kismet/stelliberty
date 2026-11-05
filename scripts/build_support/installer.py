@@ -11,7 +11,6 @@ from xml.sax.saxutils import escape as xml_escape
 from build_support.layout import display_version, service_binary_name
 from build_support.models import AppMetadata, PlatformTarget
 from build_support.paths import (
-    DEPS_DIRECTORY,
     LINUX_INSTALLER_TEMPLATE_DIR,
     MACOS_INSTALLER_TEMPLATE_DIR,
     PACKAGES_DIR,
@@ -228,13 +227,6 @@ def build_macos_app_bundle(
         raise FileNotFoundError(f"macOS executable does not exist: {executable_path}")
 
     set_macos_payload_permissions(macos_dir, metadata, target)
-    ui_executable_path = macos_dir / DEPS_DIRECTORY / f"{metadata.app_name}_ui"
-    require_file(ui_executable_path)
-    named_ui_executable_path = ui_executable_path.with_name(metadata.display_name)
-    if named_ui_executable_path.exists():
-        raise FileExistsError(f"macOS UI executable destination already exists: {named_ui_executable_path}")
-    # 只改 apphost 文件名；它仍加载原有的 UI 程序集和依赖配置。
-    ui_executable_path.rename(named_ui_executable_path)
     write_macos_info_plist(metadata, configuration, platform_name, contents_dir / "Info.plist")
     build_macos_icns(resources_dir / "AppIcon.icns", configuration)
     return app_path
@@ -609,7 +601,7 @@ def render_windows_template(
         "APP_VERSION": metadata.version,
         "APP_PUBLISHER": metadata.display_name,
         "APP_EXE_NAME": f"{metadata.app_name}.exe",
-        "APP_UI_EXE_NAME": str(DEPS_DIRECTORY / f"{metadata.app_name}_ui.exe").replace("/", "\\"),
+        "LEGACY_UI_NAME": f"{metadata.app_name}_ui",
         "APP_PACKAGE_NAME": metadata.app_name.lower(),
         "APP_MUTEX": single_instance_mutex(metadata, configuration),
         "APP_ID": app_id(configuration),
@@ -628,7 +620,7 @@ def render_windows_template(
 
 
 def single_instance_mutex(metadata: AppMetadata, configuration: str) -> str:
-    channel = "Dev" if configuration == "dev" else "Release"
+    channel = "Debug" if configuration == "dev" else "Release"
     return f"Global\\{metadata.app_name}.{channel}.SingleInstance"
 
 
@@ -836,7 +828,6 @@ def build_macos_icns(output_path: Path, configuration: str) -> None:
 def set_macos_payload_permissions(install_dir: Path, metadata: AppMetadata, target: PlatformTarget) -> None:
     executable_paths = [
         install_dir / metadata.app_name,
-        install_dir / DEPS_DIRECTORY / f"{metadata.app_name}_ui",
         install_dir / "data" / "core" / "clash-mihomo-core",
         install_dir / "data" / "service" / "update" / service_binary_name(metadata, target),
     ]
@@ -865,7 +856,6 @@ def macos_min_system(platform_name: str) -> str:
 def set_linux_payload_permissions(install_dir: Path, metadata: AppMetadata, target: PlatformTarget) -> None:
     executable_paths = [
         install_dir / metadata.app_name,
-        install_dir / DEPS_DIRECTORY / f"{metadata.app_name}_ui",
         install_dir / "data" / "core" / "clash-mihomo-core",
         install_dir / "data" / "service" / "update" / service_binary_name(metadata, target),
     ]

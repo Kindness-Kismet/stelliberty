@@ -4,8 +4,10 @@ using System.Globalization;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.VisualTree;
+using Stelliberty.Application.Runtime;
 
 namespace Stelliberty.Desktop.Debug;
 
@@ -19,6 +21,8 @@ internal static partial class DebugCommands
             || string.Equals(command, "clipboard.read", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "toast.state", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.memory", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "app.power-state", StringComparison.OrdinalIgnoreCase)
+            || command.StartsWith("app.power-event ", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.quit", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.state", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "window.minimize", StringComparison.OrdinalIgnoreCase)
@@ -35,6 +39,23 @@ internal static partial class DebugCommands
 
     private static async Task<string?> ExecuteAppCommandAsync(MainWindow window, string command)
     {
+        if (string.Equals(command, "app.power-state", StringComparison.OrdinalIgnoreCase))
+        {
+            return PowerStateText();
+        }
+
+        if (command.StartsWith("app.power-event ", StringComparison.OrdinalIgnoreCase))
+        {
+            var kind = command["app.power-event ".Length..].Trim().ToLowerInvariant() switch
+            {
+                "suspend" => SystemPowerEventKind.Suspend,
+                "resume" => SystemPowerEventKind.Resume,
+                _ => throw new InvalidOperationException("Power event must be suspend or resume"),
+            };
+            await ((App)Avalonia.Application.Current!).InjectPowerEventAsync(kind);
+            return PowerStateText();
+        }
+
         if (string.Equals(command, "window.appearance.state", StringComparison.OrdinalIgnoreCase))
         {
             return JsonSerializer.Serialize(WindowAppearanceProbe.Capture(window));
@@ -82,7 +103,8 @@ internal static partial class DebugCommands
 
         if (string.Equals(command, "app.quit", StringComparison.OrdinalIgnoreCase))
         {
-            window.RequestShutdown();
+            var desktop = (IClassicDesktopStyleApplicationLifetime)Avalonia.Application.Current!.ApplicationLifetime!;
+            desktop.TryShutdown();
             return null;
         }
 
@@ -169,6 +191,16 @@ internal static partial class DebugCommands
             $"screenHeight={workingArea?.Height.ToString(CultureInfo.InvariantCulture) ?? string.Empty}");
     }
 
+    private static string PowerStateText()
+    {
+        var app = (App)Avalonia.Application.Current!;
+        return JsonSerializer.Serialize(new
+        {
+            PowerRecovery = app.PowerRecoverySnapshot,
+            app.PowerMonitorStatus,
+        });
+    }
+
     private static string MemoryStateText(MainWindow window)
     {
         using var process = Process.GetCurrentProcess();
@@ -177,6 +209,7 @@ internal static partial class DebugCommands
         var controls = window.GetVisualDescendants().OfType<Control>().Count() + 1;
         return string.Join(
             ';',
+            $"pid={process.Id}",
             $"private_mb={ToMegabytes(process.PrivateMemorySize64)}",
             $"working_set_mb={ToMegabytes(process.WorkingSet64)}",
             $"managed_mb={ToMegabytes(GC.GetTotalMemory(false))}",

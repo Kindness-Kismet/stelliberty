@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using Avalonia;
+using Avalonia.Input.Platform;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Stelliberty.Application.Diagnostics;
-using Stelliberty.Infrastructure.Tray;
+using Stelliberty.Desktop.Runtime;
 using Stelliberty.Application.Localization;
 using Stelliberty.Application.Overrides;
 using Stelliberty.Domain.Overrides;
@@ -43,7 +44,9 @@ namespace Stelliberty.Desktop;
 
 public sealed partial class App : Avalonia.Application
 {
-    private DesktopTraySession? _traySession;
+    private DesktopRuntime? _runtime;
+    private DesktopTrayService? _trayService;
+    private Task _initializationTask = Task.CompletedTask;
     private MainWindow? _mainWindow;
     private IActivatableLifetime? _macOSActivatableLifetime;
     private long _backgroundRevision = -1;
@@ -51,7 +54,6 @@ public sealed partial class App : Avalonia.Application
     private long _providerRevision;
     private AppUpdateAutoCheckResult? _lastAppUpdate;
     private DispatcherTimer? _homeRuntimeTimer;
-    // 主动退出最多等待服务核心 5 秒，普通核心在 Rust 侧使用相同总预算。
 
     public override void Initialize()
     {
@@ -67,12 +69,6 @@ public sealed partial class App : Avalonia.Application
             var startupStartedAt = Stopwatch.GetTimestamp();
             LogStartupTrace("Framework initialization started", startupStartedAt);
 #endif
-            _traySession = DesktopLaunchContext.TraySession
-                ?? throw new InvalidOperationException("Desktop UI requires a tray session.");
-            _traySession.ActivationRequested += OnTrayActivationRequested;
-            _traySession.ToggleRequested += OnTrayToggleRequested;
-            _traySession.Disconnected += OnTrayDisconnected;
-            _traySession.BackgroundChanged += OnBackgroundChanged;
             AppLogger.Info("Creating main window");
             var platformDirectories = new DesktopPlatformDirectories();
             // 代理组图标磁盘缓存，进程重启后免重下。
@@ -94,12 +90,19 @@ public sealed partial class App : Avalonia.Application
                 ? new WindowsUwpLoopbackService()
                 : new UnsupportedUwpLoopbackService();
             var systemProxyHostDetector = new NetworkInterfaceSystemProxyHostDetector();
-            ISystemProxyController systemProxyService = new TraySystemProxyController();
-            var serviceModeManager = new TrayServiceModeManager();
+            _runtime = new DesktopRuntime(systemProxyPlatform);
+            _runtime.BackgroundTasks.StateChanged += OnBackgroundChanged;
+            var coreManager = _runtime.Core;
+            ISystemProxyController systemProxyService = _runtime.SystemProxy;
+            IServiceModeManager serviceModeManager = coreManager;
             var networkConnectionProbe = new SystemNetworkConnectionProbe();
             var processPrivilegeProbe = new SystemProcessPrivilegeProbe();
             IAppBehaviorService appBehaviorService = CreateAppBehaviorService();
-            IGlobalHotkeyService globalHotkeyService = new TrayGlobalHotkeyService();
+            _trayService = new DesktopTrayService(ShowMainWindow, ToggleMainWindow,
+                () => _mainWindow?.RequestShutdown(), WriteClipboardAsync,
+                coreManager, _runtime.Traffic, systemProxyService);
+            _ = _trayService.StartAsync();
+            IGlobalHotkeyService globalHotkeyService = _trayService;
             var initialLanguage = AppLanguageParser.Parse(settings.Language);
             var localization = new JsonLocalizationService(initialLanguage);
             LocalizationManager.Initialize(localization);
@@ -153,7 +156,7 @@ public sealed partial class App : Avalonia.Application
                 new SubscriptionProviderSnapshotService(subscriptionStore,
                     new FileSubscriptionProviderSnapshotStore(platformDirectories.RuntimeDirectory),
                     new SubscriptionProviderParser()),
-                _traySession);
+                coreManager);
             ISubscriptionProviderUploader subscriptionProviderUploader = new FileSubscriptionProviderUploader(platformDirectories.CoreDirectory);
             ISubscriptionFileOpener subscriptionFileOpener = new DesktopSubscriptionFileOpener(subscriptionStore.GetContentPath);
             IOverrideFileOpener overrideFileOpener = new DesktopOverrideFileOpener(overrideStore.GetContentPath);
@@ -184,22 +187,21 @@ public sealed partial class App : Avalonia.Application
                 overrideFileOpener,
                 localization);
 #if DEBUG
-            var pipeProxyCoreClient = new PipeCoreProxyClient(TrayCoreEndpoints.Core);
-            IProxyCoreClient proxyCoreClient = new TrayRuntimeProxyCoreClient(new ProxyCoreClient(pipeProxyCoreClient));
+            var pipeProxyCoreClient = new PipeCoreProxyClient(CoreEndpoints.Core);
+            IProxyCoreClient proxyCoreClient = new RuntimeProxyCoreClient(new ProxyCoreClient(pipeProxyCoreClient), _runtime.Traffic);
             IProxyDelayTester proxyDelayTester = new PipeCoreProxyDelayTester(
-                TrayCoreEndpoints.Core,
+                CoreEndpoints.Core,
                 () => settings.DelayTestUrl,
                 5000);
 #else
 
-            IProxyCoreClient proxyCoreClient = new TrayRuntimeProxyCoreClient(new PipeCoreProxyClient(TrayCoreEndpoints.Core));
+            IProxyCoreClient proxyCoreClient = new RuntimeProxyCoreClient(new PipeCoreProxyClient(CoreEndpoints.Core), _runtime.Traffic);
             IProxyDelayTester proxyDelayTester = new PipeCoreProxyDelayTester(
-                TrayCoreEndpoints.Core,
+                CoreEndpoints.Core,
                 () => settings.DelayTestUrl,
                 5000);
 #endif
 
-            var coreManager = new TrayCoreManager();
             var connectionPage = new ConnectionPageViewModel(proxyCoreClient, localization: localization);
             var proxyConfigSource = new FileRuntimeProxyConfigSource(platformDirectories.RuntimeDirectory, subscriptionSelectionStore);
             var proxyConfigParser = new ProxyConfigParser();
@@ -241,7 +243,7 @@ public sealed partial class App : Avalonia.Application
                 ? parsedProxyNodeSortMode
                 : ProxyNodeSortMode.Default;
             var proxyPage = new ProxyPageViewModel(
-                new ProxyDelayService(proxyDelayTester, _traySession),
+                new ProxyDelayService(proxyDelayTester),
                 proxyCoreClient,
                 primaryProxyConfigProvider,
                 fallbackProxyConfigProvider,
@@ -300,9 +302,7 @@ public sealed partial class App : Avalonia.Application
                 systemPlatform: systemProxyPlatform,
                 clipboardWriter: clipboardWriter,
                 appLogReader: new FileAppLogReader(DesktopApplicationLayout.RunningLogFilePath),
-                appLogExporter: new FileAppLogExporter(
-                    DesktopApplicationLayout.RunningLogFilePath,
-                    DesktopApplicationLayout.TrayRunningLogFilePath));
+                appLogExporter: new FileAppLogExporter(DesktopApplicationLayout.RunningLogFilePath));
 #if DEBUG
             LogStartupTrace("Main view model created", startupStartedAt);
 #endif
@@ -317,13 +317,18 @@ public sealed partial class App : Avalonia.Application
             mainWindow.PrepareShutdownAsync = async () =>
             {
                 StopBackgroundServices();
-                if (mainWindow.ShouldShutdownTray)
-                {
-                    await ShutdownTrayAsync();
-                }
-                await UnregisterTraySessionAsync();
+                _trayService.Dispose();
+                _runtime.BackgroundTasks.StateChanged -= OnBackgroundChanged;
+                _runtime.RequestStop();
+                await _initializationTask;
+                await _runtime.DisposeAsync();
             };
-            desktop.MainWindow = mainWindow;
+            mainWindow.OsShutdownDetected = _runtime.HandleSessionEnd;
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            desktop.ShutdownRequested += OnDesktopShutdownRequested;
+            // 静默启动不登记 MainWindow，避免桌面生命周期自动显示窗口。
+            if (Program.ShowWindowOnStart) desktop.MainWindow = mainWindow;
+            Program.SingleInstance?.Listen(() => Dispatcher.UIThread.Post(ShowMainWindow));
             if (OperatingSystem.IsMacOS())
             {
                 if (_macOSActivatableLifetime is not null)
@@ -338,32 +343,22 @@ public sealed partial class App : Avalonia.Application
             }
             desktop.Exit += (_, _) =>
             {
+                desktop.ShutdownRequested -= OnDesktopShutdownRequested;
                 StopBackgroundServices();
                 if (_macOSActivatableLifetime is not null)
                 {
                     _macOSActivatableLifetime.Activated -= OnMacOSApplicationActivated;
                     _macOSActivatableLifetime = null;
                 }
-                if (_traySession is not null)
-                {
-                    _traySession.ActivationRequested -= OnTrayActivationRequested;
-                    _traySession.ToggleRequested -= OnTrayToggleRequested;
-                    _traySession.Disconnected -= OnTrayDisconnected;
-                    _traySession.BackgroundChanged -= OnBackgroundChanged;
-                }
-                _traySession = null;
+                _runtime.HandleSessionEnd();
+                _trayService.Dispose();
                 _mainWindow = null;
                 viewModel.Dispose();
                 globalHotkeyService.Dispose();
-                coreManager.Dispose();
                 DisposeOwnedServices(selectionRestoringCoreManager, proxyCoreClient, proxyDelayTester,
-                    webDavBackupStore, systemProxyService, serviceModeManager);
-                AppLogger.Info("Desktop UI session closed");
+                    webDavBackupStore);
+                AppLogger.Info("Desktop application closed");
             };
-            if (_traySession.IsDisconnected)
-            {
-                mainWindow.RequestUiShutdown();
-            }
 #if DEBUG
             DebugCommands.Start(mainWindow);
 #endif
@@ -374,7 +369,9 @@ public sealed partial class App : Avalonia.Application
 #if DEBUG
                     LogStartupTrace("Background startup dispatch entered", startupStartedAt);
 #endif
-                    _ = InitializePageDataAsync(coreManager, viewModel, proxySelectionRestorer);
+                    if (mainWindow.IsShutdownPreparing) return;
+                    _ = _runtime.StartAsync(systemProxyPlatform);
+                    _initializationTask = InitializePageDataAsync(viewModel, proxySelectionRestorer);
                 },
                 DispatcherPriority.Background);
 #if DEBUG
@@ -385,26 +382,19 @@ public sealed partial class App : Avalonia.Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private async Task UnregisterTraySessionAsync()
+    private void OnDesktopShutdownRequested(object? sender, ShutdownRequestedEventArgs args)
     {
-        if (_traySession is null)
+        if (_runtime?.IsSystemShutdownRequested == true)
         {
+            _runtime?.HandleSessionEnd();
             return;
         }
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-        try
-        {
-            await _traySession.UnregisterAsync(timeout.Token);
-        }
-        catch (Exception exception) when (exception is IOException or OperationCanceledException)
-        {
-            AppLogger.Warning($"Desktop UI session unregister failed: {exception.Message}");
-        }
+        if (_mainWindow is not { IsShutdownReady: false } mainWindow) return;
+        args.Cancel = true;
+        // 先退出本次生命周期回调，再统一执行异步清理，避免最终退出重入。
+        Dispatcher.UIThread.Post(mainWindow.RequestShutdown);
     }
-
-    private void OnTrayActivationRequested(object? sender, EventArgs args) =>
-        Dispatcher.UIThread.Post(ShowMainWindow);
 
     private void OnMacOSApplicationActivated(object? sender, ActivatedEventArgs args)
     {
@@ -422,15 +412,9 @@ public sealed partial class App : Avalonia.Application
         });
     }
 
-    private void OnTrayToggleRequested(object? sender, EventArgs args) =>
-        Dispatcher.UIThread.Post(ToggleMainWindow);
-
-    private void OnTrayDisconnected(object? sender, EventArgs args) =>
-        Dispatcher.UIThread.Post(() => _mainWindow?.RequestUiShutdown());
-
     private void ShowMainWindow()
     {
-        if (_mainWindow is not { } mainWindow)
+        if (_mainWindow is not { IsShutdownPreparing: false } mainWindow)
         {
             return;
         }
@@ -445,7 +429,7 @@ public sealed partial class App : Avalonia.Application
 
     private void ToggleMainWindow()
     {
-        if (_mainWindow is not { } mainWindow)
+        if (_mainWindow is not { IsShutdownPreparing: false } mainWindow)
         {
             return;
         }
@@ -466,30 +450,30 @@ public sealed partial class App : Avalonia.Application
         ShowMainWindow();
     }
 
-    private async Task ShutdownTrayAsync()
+    private async Task WriteClipboardAsync(string text, CancellationToken cancellationToken)
     {
-        if (_traySession is null)
+        cancellationToken.ThrowIfCancellationRequested();
+        await Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            return;
-        }
-
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-        try
-        {
-            await _traySession.ShutdownTrayAsync(timeout.Token);
-        }
-        catch (Exception exception) when (exception is IOException or OperationCanceledException)
-        {
-            AppLogger.Warning($"Tray shutdown request failed: {exception.Message}");
-        }
+            var clipboard = _mainWindow?.Clipboard
+                ?? throw new InvalidOperationException("Application clipboard is unavailable.");
+            await clipboard.SetTextAsync(text);
+        });
     }
+
+#if DEBUG
+    internal SystemPowerRecoverySnapshot PowerRecoverySnapshot => _runtime!.PowerRecoverySnapshot;
+    internal string PowerMonitorStatus => _runtime!.PowerMonitorStatus;
+    internal Task InjectPowerEventAsync(SystemPowerEventKind kind) => _runtime!.InjectPowerEventAsync(kind);
+#endif
 
     private void OnBackgroundChanged(object? sender, BackgroundTaskStatus status) =>
         Dispatcher.UIThread.Post(() => _ = ApplyBackgroundStatusAsync(status));
 
     private async Task ApplyBackgroundStatusAsync(BackgroundTaskStatus status)
     {
-        if (_mainWindow?.DataContext is not MainWindowViewModel viewModel || status.Revision <= _backgroundRevision)
+        if (_mainWindow is not { IsShutdownPreparing: false, DataContext: MainWindowViewModel viewModel }
+            || status.Revision <= _backgroundRevision)
         {
             return;
         }
@@ -551,7 +535,7 @@ public sealed partial class App : Avalonia.Application
     }
 
     private async Task InitializePageDataAsync(
-        TrayCoreManager coreManager, MainWindowViewModel viewModel, ProxySelectionRestorer proxySelectionRestorer)
+        MainWindowViewModel viewModel, ProxySelectionRestorer proxySelectionRestorer)
     {
 #if DEBUG
         await DebugCommands.DelayPageInitializationAsync();
@@ -561,7 +545,10 @@ public sealed partial class App : Avalonia.Application
             await Task.WhenAll(
                 viewModel.SubscriptionPage.InitializeAsync(),
                 viewModel.OverridePage.InitializeAsync(),
-                StartCoreServicesAsync(coreManager, viewModel, viewModel.ProxyPage, viewModel.RulePage, proxySelectionRestorer));
+                StartCoreServicesAsync(viewModel, viewModel.ProxyPage, viewModel.RulePage, proxySelectionRestorer));
+        }
+        catch (OperationCanceledException) when (_runtime!.StoppingToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -570,7 +557,6 @@ public sealed partial class App : Avalonia.Application
     }
 
     private async Task StartCoreServicesAsync(
-        TrayCoreManager coreManager,
         MainWindowViewModel viewModel,
         ProxyPageViewModel proxyPage,
         RulePageViewModel rulePage,
@@ -582,51 +568,51 @@ public sealed partial class App : Avalonia.Application
         using var coreLogLoading = viewModel.CoreLogPage.Loading.BeginLoading();
         try
         {
-            await coreManager.EnsureReadyAsync(CancellationToken.None);
+            var result = await _runtime!.Startup;
+            if (!result.IsSuccess) throw new InvalidOperationException(result.Message);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             AppLogger.Warning($"Core manager startup failed: {exception.Message}");
             viewModel.ShowErrorToast(LocalizationManager.Translate("Common.Error.CoreStartupFailed"));
         }
 
+        var cancellationToken = _runtime!.StoppingToken;
+        cancellationToken.ThrowIfCancellationRequested();
         viewModel.CompleteInitialCoreLogLoad();
         try
         {
-            await viewModel.ConnectionPage.RefreshConnectionsAsync();
+            await viewModel.ConnectionPage.RefreshConnectionsAsync(cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             AppLogger.Warning($"Startup connection list load failed: {exception.Message}");
         }
 
         try
         {
-            await proxySelectionRestorer.RestoreCurrentSubscriptionAsync(preserveFixedSelections: true);
+            await proxySelectionRestorer.RestoreCurrentSubscriptionAsync(cancellationToken, preserveFixedSelections: true);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             AppLogger.Warning($"Startup proxy selection restore failed: {exception.Message}");
         }
 
         try
         {
-            await proxyPage.RefreshProxiesAsync();
+            await proxyPage.RefreshProxiesAsync(cancellationToken);
             if (viewModel.SubscriptionPage.CurrentSubscriptionId is { } subscriptionId)
             {
                 proxyPage.BindLoadedConfigToSubscription(subscriptionId);
             }
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             AppLogger.Warning($"Startup proxy list refresh failed: {exception.Message}");
         }
 
         RefreshRulesForStartup(rulePage);
-        if (_traySession is not null)
-        {
-            await ApplyBackgroundStatusAsync(await _traySession.GetBackgroundStatusAsync(CancellationToken.None));
-        }
+        await ApplyBackgroundStatusAsync(_runtime!.BackgroundTasks.Status);
     }
 
     internal static void RefreshRulesForStartup(RulePageViewModel rulePage)
@@ -684,17 +670,17 @@ public sealed partial class App : Avalonia.Application
     {
         if (OperatingSystem.IsWindows())
         {
-            return new WindowsAppBehaviorService(DesktopApplicationLayout.TrayBinaryPath);
+            return new WindowsAppBehaviorService(DesktopApplicationLayout.DesktopBinaryPath);
         }
 
         if (OperatingSystem.IsLinux())
         {
-            return new LinuxAppBehaviorService(DesktopApplicationLayout.TrayBinaryPath);
+            return new LinuxAppBehaviorService(DesktopApplicationLayout.DesktopBinaryPath);
         }
 
         if (OperatingSystem.IsMacOS())
         {
-            return new MacOSAppBehaviorService(DesktopApplicationLayout.TrayBinaryPath);
+            return new MacOSAppBehaviorService(DesktopApplicationLayout.DesktopBinaryPath);
         }
 
         return new UnsupportedAppBehaviorService();
