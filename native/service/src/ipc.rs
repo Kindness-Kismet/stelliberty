@@ -35,7 +35,21 @@ impl ServiceState {
     }
 
     async fn handle(&self, command: ServiceCommand) -> ServiceResponse {
-        match command {
+        let operation = match &command {
+            ServiceCommand::Status | ServiceCommand::Heartbeat | ServiceCommand::Logs { .. } => {
+                None
+            }
+            ServiceCommand::StartCore { .. } => Some("start-core"),
+            ServiceCommand::ApplyCoreConfig { .. } => Some("apply-core-config"),
+            ServiceCommand::StopCore => Some("stop-core"),
+            ServiceCommand::RestartCore => Some("restart-core"),
+            ServiceCommand::Shutdown => Some("shutdown"),
+        };
+        let started_at = Instant::now();
+        if let Some(operation) = operation {
+            logging::info(format!("Service command received: operation={operation}"));
+        }
+        let response = match command {
             ServiceCommand::Status => self.status().await,
             ServiceCommand::Heartbeat => {
                 *self.last_heartbeat.lock().await = Some(Instant::now());
@@ -108,7 +122,20 @@ impl ServiceState {
             ServiceCommand::Shutdown => ServiceResponse::Success {
                 message: Some("Service is stopping".to_string()),
             },
+        };
+        if let Some(operation) = operation {
+            match &response {
+                ServiceResponse::Error { code, message } => logging::error(format!(
+                    "Service command failed: operation={operation} elapsed={}ms code={code} error={message}",
+                    started_at.elapsed().as_millis()
+                )),
+                _ => logging::info(format!(
+                    "Service command completed: operation={operation} elapsed={}ms",
+                    started_at.elapsed().as_millis()
+                )),
+            }
         }
+        response
     }
 
     async fn shutdown(&self) {

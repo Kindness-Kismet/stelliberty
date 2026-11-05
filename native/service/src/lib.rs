@@ -38,6 +38,14 @@ Options:
 pub fn run() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let command_name = args.get(1).map(String::as_str).unwrap_or("service");
+    // 查询命令不写服务文件，避免心跳轮询淹没宿主的生命周期记录。
+    if args.get(1).is_none() || command_name == "foreground" {
+        logging::initialize();
+        logging::info(format!(
+            "Service process started: version={}",
+            service_version()
+        ));
+    }
     logging::info(format!("Running service command: {command_name}"));
     let result = match args.get(1).map(String::as_str) {
         None if should_print_help_without_command() => {

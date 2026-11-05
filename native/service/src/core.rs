@@ -702,8 +702,10 @@ mod windows_impl {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     use std::sync::Mutex as StdMutex;
+    use std::time::Instant;
     use windows::Win32::Foundation::{
-        CloseHandle, DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE, WAIT_TIMEOUT,
+        CloseHandle, DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE, WAIT_FAILED, WAIT_OBJECT_0,
+        WAIT_TIMEOUT,
     };
     use windows::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
@@ -915,9 +917,15 @@ mod windows_impl {
     }
 
     pub async fn shutdown(child: ChildHandle, timeout: Duration) -> Result<()> {
+        let pid = child.pid;
+        let started = Instant::now();
         let inner = child.inner;
         let lock_path = child.lock_path;
-        tokio::task::spawn_blocking(move || -> Result<()> {
+        logging::info(format!(
+            "Core process stop started: pid={pid} wait_ms={} method=job-close",
+            timeout.as_millis()
+        ));
+        let result = tokio::task::spawn_blocking(move || -> Result<()> {
             let job = inner
                 .job
                 .lock()
@@ -929,27 +937,71 @@ mod windows_impl {
                 .map_err(|_| anyhow!("process lock is poisoned"))?
                 .take();
 
-            // 安全前提：整数句柄只来自本模块保存的有效 Win32 句柄。
+            let mut failures = Vec::new();
+            let mut has_exited = false;
+            // 安全前提：整数句柄只来自本模块持有的 Win32 句柄，等待结束后各关闭一次。
             unsafe {
                 if let Some(job) = job {
-                    let _ = CloseHandle(isize_to_handle(job));
+                    if let Err(error) = CloseHandle(isize_to_handle(job)) {
+                        failures.push(format!("Failed to close core Job Object: {error}"));
+                    }
                 }
                 if let Some(process) = process {
-                    if WaitForSingleObject(isize_to_handle(process), timeout.as_millis() as u32)
-                        == WAIT_TIMEOUT
-                    {
-                        let _ = CloseHandle(isize_to_handle(process));
-                        return Err(anyhow!("Core stop timed out"));
+                    let wait = WaitForSingleObject(isize_to_handle(process), timeout.as_millis() as u32);
+                    if wait == WAIT_OBJECT_0 {
+                        has_exited = true;
+                        let mut exit_code = 0u32;
+                        match GetExitCodeProcess(isize_to_handle(process), &mut exit_code) {
+                            Ok(()) => logging::info(format!(
+                                "Core process exit confirmed: pid={pid} elapsed_ms={} exit_code=0x{exit_code:08X}",
+                                started.elapsed().as_millis()
+                            )),
+                            Err(error) => logging::warn(format!(
+                                "Core process exit confirmed: pid={pid} elapsed_ms={} exit_code=unavailable error={error}",
+                                started.elapsed().as_millis()
+                            )),
+                        }
+                    } else if wait == WAIT_TIMEOUT {
+                        failures.push("Timed out waiting for core to exit".to_string());
+                    } else if wait == WAIT_FAILED {
+                        failures.push(format!(
+                            "Failed to wait for core to exit: {}",
+                            windows::core::Error::from_thread()
+                        ));
+                    } else {
+                        failures.push(format!("Unexpected core wait result: 0x{:08X}", wait.0));
                     }
-                    let _ = CloseHandle(isize_to_handle(process));
+                    if let Err(error) = CloseHandle(isize_to_handle(process)) {
+                        failures.push(format!("Failed to close core process handle: {error}"));
+                    }
+                } else {
+                    failures.push("Core process handle is unavailable; exit cannot be confirmed".to_string());
                 }
             }
-            remove_core_lock(&lock_path);
+            if has_exited {
+                remove_core_lock(&lock_path);
+            }
+            if !failures.is_empty() {
+                return Err(anyhow!(failures.join("; ")));
+            }
             Ok(())
         })
         .await
-        .context("Core shutdown background task failed")??;
-        Ok(())
+        .context("Core shutdown background task failed")
+        .and_then(|result| result);
+        match &result {
+            Ok(()) => logging::info(format!(
+                "Core process stop completed: pid={pid} wait_ms={} elapsed_ms={}",
+                timeout.as_millis(),
+                started.elapsed().as_millis()
+            )),
+            Err(error) => logging::error(format!(
+                "Core process stop failed: pid={pid} wait_ms={} elapsed_ms={} error={error:#}",
+                timeout.as_millis(),
+                started.elapsed().as_millis()
+            )),
+        }
+        result
     }
 }
 

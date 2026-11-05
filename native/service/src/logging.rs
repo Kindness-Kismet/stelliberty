@@ -3,9 +3,39 @@ use std::sync::{Mutex, OnceLock};
 
 use time::{OffsetDateTime, UtcOffset};
 
+mod file;
+
 const MAX_LOG_LINES: usize = 2000;
 const DEFAULT_PRINT_LINES: usize = 200;
-static LOGS: OnceLock<Mutex<VecDeque<String>>> = OnceLock::new();
+static LOGS: OnceLock<Mutex<LogState>> = OnceLock::new();
+
+struct LogState {
+    entries: VecDeque<String>,
+    file: Option<file::FileLog>,
+    file_error: Option<String>,
+}
+
+pub fn initialize() {
+    match file::FileLog::open() {
+        Ok(file) => {
+            let path = file.path().display().to_string();
+            logs()
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .file = Some(file);
+            info(format!("Service file logging initialized: path={path}"));
+        }
+        Err(failure) => error(format!(
+            "Service file logging initialization failed: {failure}"
+        )),
+    }
+
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic| {
+        error(format!("Service panic: {panic}"));
+        previous_hook(panic);
+    }));
+}
 
 pub fn info(message: impl AsRef<str>) {
     write("I", message.as_ref());
@@ -22,8 +52,12 @@ pub fn error(message: impl AsRef<str>) {
 pub fn recent(lines: usize) -> Vec<String> {
     let count = lines.min(MAX_LOG_LINES);
     let guard = logs().lock().unwrap_or_else(|error| error.into_inner());
-    let start = guard.len().saturating_sub(count);
-    guard.iter().skip(start).cloned().collect()
+    let start = guard.entries.len().saturating_sub(count);
+    guard.entries.iter().skip(start).cloned().collect()
+}
+
+pub fn persisted(lines: usize) -> std::io::Result<Vec<String>> {
+    file::read_recent(lines.min(MAX_LOG_LINES))
 }
 
 pub fn default_line_count() -> usize {
@@ -31,15 +65,44 @@ pub fn default_line_count() -> usize {
 }
 
 fn write(level: &str, message: &str) {
+    let line = format!(
+        "[{level}] {} pid={} {}",
+        timestamp(),
+        std::process::id(),
+        sanitize(message)
+    );
     let mut guard = logs().lock().unwrap_or_else(|error| error.into_inner());
-    if guard.len() >= MAX_LOG_LINES {
-        guard.pop_front();
+    push_line(&mut guard.entries, line.clone());
+    if let Some(file) = &guard.file {
+        match file.append(&line) {
+            Ok(()) => guard.file_error = None,
+            Err(error) => {
+                let message = format!("Service log file write failed: {error}");
+                if guard.file_error.as_deref() != Some(message.as_str()) {
+                    let diagnostic = format!("[E] {} {}", timestamp(), sanitize(&message));
+                    push_line(&mut guard.entries, diagnostic);
+                    guard.file_error = Some(message);
+                }
+            }
+        }
     }
-    guard.push_back(format!("[{level}] {} {}", timestamp(), sanitize(message)));
 }
 
-fn logs() -> &'static Mutex<VecDeque<String>> {
-    LOGS.get_or_init(|| Mutex::new(VecDeque::with_capacity(MAX_LOG_LINES)))
+fn push_line(entries: &mut VecDeque<String>, line: String) {
+    if entries.len() >= MAX_LOG_LINES {
+        entries.pop_front();
+    }
+    entries.push_back(line);
+}
+
+fn logs() -> &'static Mutex<LogState> {
+    LOGS.get_or_init(|| {
+        Mutex::new(LogState {
+            entries: VecDeque::with_capacity(MAX_LOG_LINES),
+            file: None,
+            file_error: None,
+        })
+    })
 }
 
 fn timestamp() -> String {

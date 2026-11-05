@@ -31,6 +31,10 @@ internal static class DesktopApplicationLayout
 
     public static string ServiceDirectory => Path.Combine(AppDataDirectory, PathConventions.ServiceSubdirectory);
 
+    public static string ServiceLogFilePath => Path.Combine(ServiceDirectory, "service.logs");
+
+    public static string PreviousServiceLogFilePath => Path.Combine(ServiceDirectory, "service.previous.logs");
+
     public static string ServiceUpdateDirectory => Path.Combine(
         InstallDataDirectory,
         PathConventions.ServiceSubdirectory,

@@ -302,7 +302,10 @@ public sealed partial class App : Avalonia.Application
                 systemPlatform: systemProxyPlatform,
                 clipboardWriter: clipboardWriter,
                 appLogReader: new FileAppLogReader(DesktopApplicationLayout.RunningLogFilePath),
-                appLogExporter: new FileAppLogExporter(DesktopApplicationLayout.RunningLogFilePath));
+                appLogExporter: new FileAppLogExporter(
+                    DesktopApplicationLayout.RunningLogFilePath,
+                    DesktopApplicationLayout.ServiceLogFilePath,
+                    DesktopApplicationLayout.PreviousServiceLogFilePath));
 #if DEBUG
             LogStartupTrace("Main view model created", startupStartedAt);
 #endif
