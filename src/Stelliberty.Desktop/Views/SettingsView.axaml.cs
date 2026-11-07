@@ -78,24 +78,6 @@ public sealed partial class SettingsView : UserControl
         }
     }
 
-    internal IReadOnlyDictionary<SettingsSubPage, Vector> CaptureScrollOffsets()
-    {
-        SaveScrollOffset(_currentSubPage);
-        return new Dictionary<SettingsSubPage, Vector>(_scrollOffsets);
-    }
-
-    internal void RestoreScrollOffsets(IReadOnlyDictionary<SettingsSubPage, Vector> offsets)
-    {
-        _scrollOffsets.Clear();
-        foreach (var (page, offset) in offsets)
-        {
-            _scrollOffsets[page] = offset;
-        }
-
-        _currentSubPage = _settings?.SubPage ?? SettingsSubPage.Root;
-        RestoreScrollOffset(_currentSubPage);
-    }
-
     private void SaveScrollOffset(SettingsSubPage page)
         => _scrollOffsets[page] = SettingsScroll.Offset;
 
@@ -221,7 +203,7 @@ public sealed partial class SettingsView : UserControl
         _pointeroverSuppressor.Reset();
     }
 
-    // 页面离开视觉树时解除设置订阅，允许隐藏窗口后回收。
+    // 页面离开视觉树时解除设置订阅，避免保留已关闭的视图。
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs args)
     {
         SaveScrollOffset(_currentSubPage);

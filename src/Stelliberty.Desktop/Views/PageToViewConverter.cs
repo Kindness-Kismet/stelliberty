@@ -28,12 +28,7 @@ public sealed class PageToViewConverter : IValueConverter
         return GetOrCreateView(page);
     }
 
-    public int ClearCache()
-    {
-        var count = _views.Count;
-        _views.Clear();
-        return count;
-    }
+    public void ClearCache() => _views.Clear();
 
     public Control GetOrCreateView(NavigationPage page)
     {

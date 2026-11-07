@@ -26,3 +26,4 @@ class BuildRequest:
     metadata: AppMetadata
     pack_format: str | None
     clean: bool
+    avalonia_source: str | None = None

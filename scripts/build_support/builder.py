@@ -3,6 +3,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from build_support.avalonia_source import build_avalonia_source, copy_avalonia_source
 from build_support.commands import run
 from build_support.fonts import ensure_app_fonts
 from build_support.installer import pack_installers, pack_macos_app
@@ -17,6 +18,8 @@ CORE_ASSET_NAMES = {"asn.mmdb", "country.mmdb", "geoip.dat", "geoip.metadb", "ge
 def build(request: BuildRequest) -> None:
     reset_build_servers()
 
+    avalonia_source = build_avalonia_source(request) if request.avalonia_source else None
+
     with timed_step("Generate C# bindings"):
         generate_bindings()
 
@@ -26,7 +29,7 @@ def build(request: BuildRequest) -> None:
 
     for platform_name, target in request.platforms:
         for configuration in request.configurations:
-            build_output(request.metadata, platform_name, configuration, target, request.pack_format, request.clean)
+            build_output(request.metadata, platform_name, configuration, target, request.pack_format, request.clean, avalonia_source)
 
 def reset_build_servers() -> None:
     subprocess.run(
@@ -36,7 +39,7 @@ def reset_build_servers() -> None:
         check=False,
     )
 
-def build_output(metadata: AppMetadata, platform_name: str, configuration: str, target: PlatformTarget, pack_format: str | None, clean: bool) -> None:
+def build_output(metadata: AppMetadata, platform_name: str, configuration: str, target: PlatformTarget, pack_format: str | None, clean: bool, avalonia_source: Path | None = None) -> None:
     if pack_format == "app" and not platform_name.startswith("macos"):
         raise RuntimeError("--pack app is only supported for macOS targets")
 
@@ -54,7 +57,9 @@ def build_output(metadata: AppMetadata, platform_name: str, configuration: str, 
         build_rust(metadata, configuration, target)
 
     with timed_step(f"Build .NET {build_label}"):
-        publish_dotnet(metadata, configuration, target, output_dir)
+        publish_dotnet(metadata, configuration, target, output_dir, avalonia_source is not None)
+
+    copy_avalonia_source(avalonia_source, output_dir)
 
     copy_native_library(configuration, target, output_dir)
     copy_service_binary(metadata, configuration, target, output_dir)
@@ -135,7 +140,7 @@ def build_rust(metadata: AppMetadata, configuration: str, target: PlatformTarget
 
     run(command, env)
 
-def publish_dotnet(metadata: AppMetadata, configuration: str, target: PlatformTarget, output_dir: Path) -> None:
+def publish_dotnet(metadata: AppMetadata, configuration: str, target: PlatformTarget, output_dir: Path, memory_optimization: bool = False) -> None:
     command = [
         "dotnet",
         "publish",
@@ -154,6 +159,7 @@ def publish_dotnet(metadata: AppMetadata, configuration: str, target: PlatformTa
         "-maxcpucount:1",
         f"/p:AppVersion={metadata.version}",
         f"/p:Version={metadata.version}",
+        f"/p:AvaloniaMemoryOptimization={str(memory_optimization).lower()}",
     ]
     run(command)
 

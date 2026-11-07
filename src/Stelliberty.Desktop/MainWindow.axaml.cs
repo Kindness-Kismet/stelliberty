@@ -27,17 +27,19 @@ namespace Stelliberty.Desktop;
 
 public sealed partial class MainWindow : Window
 {
-    // 隐藏 60 秒后回收页面视觉树，托盘与核心继续运行。
-    private static readonly TimeSpan HiddenReleaseDelay = TimeSpan.FromSeconds(60);
+#if AVALONIA_MEMORY_OPTIMIZATION
+    // 隐藏满 5 秒后释放底层渲染资源，保留页面实例。
+    private static readonly TimeSpan HiddenReleaseDelay = TimeSpan.FromSeconds(5);
+#endif
     private static readonly TimeSpan PageLoadingMinVisible = TimeSpan.FromMilliseconds(300);
     private readonly WindowAppearanceService _windowAppearanceService = new();
     private readonly WindowStateService _windowStateService;
     private readonly SystemAccentColorService _systemAccentColorService = new();
     private readonly BitmapCache _proxyPageBitmapCache = new() { SnapsToDevicePixels = true };
     private readonly Dictionary<AppNavigationPage, ContentControl> _pageHosts = new();
-    private readonly Dictionary<AppNavigationPage, Dictionary<string, Vector>> _pageScrollOffsets = new();
+#if AVALONIA_MEMORY_OPTIMIZATION
     private readonly DispatcherTimer _hiddenReleaseTimer;
-    private IReadOnlyDictionary<SettingsSubPage, Vector>? _settingsScrollOffsets;
+#endif
     private bool _pageHostsReady;
     private ContentControl? _visiblePageHost;
     private ContentControl? _pendingPageHost;
@@ -61,8 +63,10 @@ public sealed partial class MainWindow : Window
     public MainWindow(IAppSettingsStore? settingsStore, AppSettings? settings)
     {
         _windowStateService = new WindowStateService(settingsStore, settings);
+#if AVALONIA_MEMORY_OPTIMIZATION
         _hiddenReleaseTimer = new DispatcherTimer { Interval = HiddenReleaseDelay };
-        _hiddenReleaseTimer.Tick += OnHiddenReleaseTimerTick;
+        _hiddenReleaseTimer.Tick += OnHiddenReleaseTimerTickAsync;
+#endif
         InitializeComponent();
         ApplyPlatformWindowDecorations();
         DataContextChanged += OnDataContextChanged;
@@ -305,7 +309,6 @@ public sealed partial class MainWindow : Window
         ShowPageHost(host);
         _visiblePageHost = host;
         ActivatePageHost(host);
-        PreparePageLayout(page, host);
     }
 
     private void AnimatePageTransition(AppNavigationPage page)
@@ -424,7 +427,6 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        PreparePageLayout(_attachedViewModel!.CurrentPage, nextHost);
         SetPageLoadingVisible(false);
         _pendingPageHost = null;
         _visiblePageHost = nextHost;
@@ -862,8 +864,10 @@ public sealed partial class MainWindow : Window
     {
         SetPageLoadingVisible(false);
         CancelPendingPageTransition();
+#if AVALONIA_MEMORY_OPTIMIZATION
         _hiddenReleaseTimer.Stop();
-        _hiddenReleaseTimer.Tick -= OnHiddenReleaseTimerTick;
+        _hiddenReleaseTimer.Tick -= OnHiddenReleaseTimerTickAsync;
+#endif
         CloseAccentPicker();
         _visiblePageHost = null;
         ClearPageHostContents();
@@ -898,78 +902,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // 隐藏回收前记录滚动位置，重建后按 AutomationId 还原。
-    private void CapturePageScrollOffsets()
-    {
-        foreach (var (page, host) in _pageHosts)
-        {
-            if (page == AppNavigationPage.Settings || host.Content is not Control content)
-            {
-                continue;
-            }
-
-            // 尚未重建的页面保留上次快照，已重建的页面以当前状态覆盖。
-            _pageScrollOffsets.Remove(page);
-            var offsets = content.GetVisualDescendants()
-                .OfType<ScrollViewer>()
-                .Select(scrollViewer => (Id: AutomationProperties.GetAutomationId(scrollViewer), scrollViewer.Offset))
-                .Where(item => !string.IsNullOrWhiteSpace(item.Id) && (item.Offset.X > 0 || item.Offset.Y > 0))
-                .ToDictionary(item => item.Id!, item => item.Offset, StringComparer.Ordinal);
-            if (offsets.Count > 0)
-            {
-                _pageScrollOffsets[page] = offsets;
-            }
-        }
-
-        if (_pageHosts.TryGetValue(AppNavigationPage.Settings, out var settingsHost)
-            && settingsHost.Content is SettingsView settingsView)
-        {
-            _settingsScrollOffsets = settingsView.CaptureScrollOffsets();
-        }
-    }
-
-    private void PreparePageLayout(AppNavigationPage page, ContentControl host)
-    {
-        if (page == AppNavigationPage.Settings && host.Content is SettingsView settingsView)
-        {
-            if (_settingsScrollOffsets is null)
-            {
-                return;
-            }
-
-            host.UpdateLayout();
-            settingsView.RestoreScrollOffsets(_settingsScrollOffsets);
-            _settingsScrollOffsets = null;
-            return;
-        }
-
-        if (!_pageScrollOffsets.Remove(page, out var offsets)
-            || host.Content is not Control content)
-        {
-            return;
-        }
-
-        host.UpdateLayout();
-        var restoredCount = 0;
-        foreach (var scrollViewer in content.GetVisualDescendants().OfType<ScrollViewer>())
-        {
-            var automationId = AutomationProperties.GetAutomationId(scrollViewer);
-            if (automationId is null || !offsets.TryGetValue(automationId, out var offset))
-            {
-                continue;
-            }
-
-            scrollViewer.Offset = offset;
-            restoredCount++;
-        }
-
-        if (restoredCount > 0)
-        {
-            host.UpdateLayout();
-        }
-    }
-
-    private void OnHiddenReleaseTimerTick(object? sender, EventArgs args)
+#if AVALONIA_MEMORY_OPTIMIZATION
+    private async void OnHiddenReleaseTimerTickAsync(object? sender, EventArgs args)
     {
         _hiddenReleaseTimer.Stop();
         if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
@@ -977,38 +911,20 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ReleaseHiddenPageViews();
-    }
-
-    private void ReleaseHiddenPageViews()
-    {
-        CapturePageScrollOffsets();
-        _visiblePageHost = null;
-        ClearPageHostContents();
-        var releasedViewCount = 0;
-        if (TryGetPageConverter(out var converter))
+        try
         {
-            releasedViewCount = converter.ClearCache();
+            var compositor = Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(this)!.Compositor;
+            // 项目按 NuGet API 编译，构建产物替换为同版本的本地实现。
+            var releaseMethod = compositor.GetType().GetMethod("TryReleaseGraphicsResourcesAsync")!;
+            var released = await (Task<bool>)releaseMethod.Invoke(compositor, null)!;
+            AppLogger.Debug($"Hidden graphics resources released={released}");
         }
-
-        if (releasedViewCount > 0)
+        catch (Exception exception)
         {
-            AppLogger.Debug($"Released {releasedViewCount} hidden page views");
+            AppLogger.Error(exception, "Hidden graphics resource release failed");
         }
-
-        Dispatcher.UIThread.Post(CollectHiddenMemory, DispatcherPriority.Background);
     }
-
-    private void CollectHiddenMemory()
-    {
-        if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
-        {
-            return;
-        }
-
-        // 等视觉树解除引用后再压缩托管堆，窗口重新显示时跳过。
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-    }
+#endif
 
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs args)
     {
@@ -1024,7 +940,9 @@ public sealed partial class MainWindow : Window
 
         if (IsVisible)
         {
+#if AVALONIA_MEMORY_OPTIMIZATION
             _hiddenReleaseTimer.Stop();
+#endif
             if (_attachedViewModel is not null)
             {
                 // 隐藏可能中断首次加载，恢复时按当前导航重建完整显示状态。
@@ -1041,8 +959,10 @@ public sealed partial class MainWindow : Window
 
         CancelPendingPageTransition();
         DeactivatePageHost(_visiblePageHost);
+#if AVALONIA_MEMORY_OPTIMIZATION
         _hiddenReleaseTimer.Stop();
         _hiddenReleaseTimer.Start();
+#endif
     }
 
     private void OnCustomAccentRequested(object? sender, EventArgs args)
