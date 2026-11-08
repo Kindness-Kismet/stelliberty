@@ -46,7 +46,7 @@ def copy_avalonia_source(source: Path | None, output: Path) -> None:
     manifest: dict = {"enabled": source is not None, "assemblies": {}}
     if source is not None:
         diff = subprocess.check_output(["git", "-C", str(source), "diff", "--binary", "HEAD"])
-        manifest.update(source=str(source), base_commit=AVALONIA_COMMIT,
+        manifest.update(base_commit=AVALONIA_COMMIT,
                         fork_repository=FORK_REPOSITORY, fork_branch=FORK_BRANCH, fork_commit=FORK_COMMIT,
                         patch_sha256=hashlib.sha256(diff).hexdigest())
         # 分支优化已移植到同版本源码，保留 NuGet 依赖清单和程序集公钥。
