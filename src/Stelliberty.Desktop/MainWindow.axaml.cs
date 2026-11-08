@@ -27,19 +27,12 @@ namespace Stelliberty.Desktop;
 
 public sealed partial class MainWindow : Window
 {
-#if AVALONIA_MEMORY_OPTIMIZATION
-    // 隐藏满 5 秒后释放底层渲染资源，保留页面实例。
-    private static readonly TimeSpan HiddenReleaseDelay = TimeSpan.FromSeconds(5);
-#endif
     private static readonly TimeSpan PageLoadingMinVisible = TimeSpan.FromMilliseconds(300);
     private readonly WindowAppearanceService _windowAppearanceService = new();
     private readonly WindowStateService _windowStateService;
     private readonly SystemAccentColorService _systemAccentColorService = new();
     private readonly BitmapCache _proxyPageBitmapCache = new() { SnapsToDevicePixels = true };
     private readonly Dictionary<AppNavigationPage, ContentControl> _pageHosts = new();
-#if AVALONIA_MEMORY_OPTIMIZATION
-    private readonly DispatcherTimer _hiddenReleaseTimer;
-#endif
     private bool _pageHostsReady;
     private ContentControl? _visiblePageHost;
     private ContentControl? _pendingPageHost;
@@ -63,10 +56,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(IAppSettingsStore? settingsStore, AppSettings? settings)
     {
         _windowStateService = new WindowStateService(settingsStore, settings);
-#if AVALONIA_MEMORY_OPTIMIZATION
-        _hiddenReleaseTimer = new DispatcherTimer { Interval = HiddenReleaseDelay };
         _hiddenReleaseTimer.Tick += OnHiddenReleaseTimerTickAsync;
-#endif
         InitializeComponent();
         ApplyPlatformWindowDecorations();
         DataContextChanged += OnDataContextChanged;
@@ -113,6 +103,10 @@ public sealed partial class MainWindow : Window
 
     private void OnDataContextChanged(object? sender, EventArgs args)
     {
+        if (_hibernatedShell is not null && _shellDataContextWasInherited)
+        {
+            _hibernatedShell.DataContext = DataContext;
+        }
         DetachViewModel();
 
         if (DataContext is MainWindowViewModel viewModel)
@@ -617,9 +611,15 @@ public sealed partial class MainWindow : Window
 
         try
         {
+            CancelHiddenRelease();
+            RestoreHiddenShell();
             _windowAppearanceService.Reapply();
             _systemAccentColorService.Reapply();
             RebuildNavigationViewsAfterHotReload();
+            if (!IsVisible)
+            {
+                _hiddenReleaseTimer.Start();
+            }
             AppLogger.Info("Hot reload recovered theme, accent color, and page view cache");
         }
         catch (Exception exception)
@@ -777,6 +777,7 @@ public sealed partial class MainWindow : Window
         if (_isShutdownRequested || _isShutdownPreparing) return;
         AppLogger.Info("Application exit requested");
         _isShutdownPreparing = true;
+        CancelHiddenRelease();
         _ = PrepareAndShutdownAsync();
     }
 
@@ -864,13 +865,12 @@ public sealed partial class MainWindow : Window
     {
         SetPageLoadingVisible(false);
         CancelPendingPageTransition();
-#if AVALONIA_MEMORY_OPTIMIZATION
-        _hiddenReleaseTimer.Stop();
+        CancelHiddenRelease();
         _hiddenReleaseTimer.Tick -= OnHiddenReleaseTimerTickAsync;
-#endif
         CloseAccentPicker();
         _visiblePageHost = null;
         ClearPageHostContents();
+        _hibernatedShell = null;
         if (TryGetPageConverter(out var converter))
         {
             converter.ClearCache();
@@ -902,30 +902,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-#if AVALONIA_MEMORY_OPTIMIZATION
-    private async void OnHiddenReleaseTimerTickAsync(object? sender, EventArgs args)
-    {
-        _hiddenReleaseTimer.Stop();
-        if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
-        {
-            return;
-        }
-
-        try
-        {
-            var compositor = Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(this)!.Compositor;
-            // 项目按 NuGet API 编译，构建产物替换为同版本的本地实现。
-            var releaseMethod = compositor.GetType().GetMethod("TryReleaseGraphicsResourcesAsync")!;
-            var released = await (Task<bool>)releaseMethod.Invoke(compositor, null)!;
-            AppLogger.Debug($"Hidden graphics resources released={released}");
-        }
-        catch (Exception exception)
-        {
-            AppLogger.Error(exception, "Hidden graphics resource release failed");
-        }
-    }
-#endif
-
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs args)
     {
         if (args.Property == WindowStateProperty)
@@ -938,11 +914,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        CancelHiddenRelease();
         if (IsVisible)
         {
-#if AVALONIA_MEMORY_OPTIMIZATION
-            _hiddenReleaseTimer.Stop();
-#endif
+            RestoreHiddenShell();
             if (_attachedViewModel is not null)
             {
                 // 隐藏可能中断首次加载，恢复时按当前导航重建完整显示状态。
@@ -959,10 +934,7 @@ public sealed partial class MainWindow : Window
 
         CancelPendingPageTransition();
         DeactivatePageHost(_visiblePageHost);
-#if AVALONIA_MEMORY_OPTIMIZATION
-        _hiddenReleaseTimer.Stop();
         _hiddenReleaseTimer.Start();
-#endif
     }
 
     private void OnCustomAccentRequested(object? sender, EventArgs args)

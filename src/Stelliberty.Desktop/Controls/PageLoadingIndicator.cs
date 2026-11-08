@@ -10,7 +10,7 @@ namespace Stelliberty.Desktop.Controls;
 
 public sealed class PageLoadingIndicator : Panel
 {
-    private static readonly TimeSpan OneWayDuration = TimeSpan.FromMilliseconds(1200);
+    private static readonly TimeSpan CycleDuration = TimeSpan.FromMilliseconds(1200);
     private const double BarHeight = 6d;
     private const double ThumbWidthRatio = 0.34d;
 
@@ -26,6 +26,7 @@ public sealed class PageLoadingIndicator : Panel
     private readonly Border _surface;
     private readonly Border _track;
     private readonly Border _thumb;
+    private readonly RectangleGeometry _barClip = new() { RadiusX = 3, RadiusY = 3 };
     private double _animationDistance;
     private bool _isAttached;
     private bool _isRunning;
@@ -40,6 +41,7 @@ public sealed class PageLoadingIndicator : Panel
             IsHitTestVisible = false,
         };
         Children.AddRange([_surface, _track, _thumb]);
+        Clip = _barClip;
         ActualThemeVariantChanged += OnActualThemeVariantChanged;
         MinWidth = 240;
         MinHeight = 64;
@@ -117,11 +119,12 @@ public sealed class PageLoadingIndicator : Panel
     {
         var barRect = ResolveBarRect(finalSize);
         var thumbWidth = barRect.Width * ThumbWidthRatio;
+        _barClip.Rect = barRect;
         _surface.Arrange(barRect);
         _track.Arrange(barRect);
-        _thumb.Arrange(new Rect(barRect.X, barRect.Y, thumbWidth, barRect.Height));
+        _thumb.Arrange(new Rect(barRect.X - thumbWidth, barRect.Y, thumbWidth, barRect.Height));
 
-        var animationDistance = barRect.Width - thumbWidth;
+        var animationDistance = barRect.Width + thumbWidth;
         if (Math.Abs(_animationDistance - animationDistance) > 0.1d)
         {
             _animationDistance = animationDistance;
@@ -181,12 +184,11 @@ public sealed class PageLoadingIndicator : Panel
         visual.Translation = default;
 
         var animation = visual.Compositor.CreateVector3DKeyFrameAnimation();
-        animation.Duration = OneWayDuration + OneWayDuration;
+        animation.Duration = CycleDuration;
         animation.IterationBehavior = AnimationIterationBehavior.Forever;
-        var easing = new SineEaseInOut();
+        // 循环重置发生在裁剪区外，首尾衔接不显示跳变。
         animation.InsertKeyFrame(0f, default);
-        animation.InsertKeyFrame(0.5f, new Vector3D(_animationDistance, 0, 0), easing);
-        animation.InsertKeyFrame(1f, default, easing);
+        animation.InsertKeyFrame(1f, new Vector3D(_animationDistance, 0, 0), new LinearEasing());
         visual.StartAnimation(nameof(CompositionVisual.Translation), animation);
     }
 

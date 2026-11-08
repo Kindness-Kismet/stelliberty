@@ -41,7 +41,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="Assets\fonts\**" />
+    <AvaloniaResource Include="Assets\fonts\GoogleSans-Regular.ttf" />
+    <AvaloniaResource Include="Assets\fonts\NotoSansSC-Thin.ttf" />
   </ItemGroup>
 
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">

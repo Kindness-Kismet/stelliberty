@@ -233,6 +233,14 @@ All interactive controls must have `AutomationProperties.AutomationId` set.
 
 Development workflow: **prebuild → test → build**.
 
+首次构建前，为执行构建脚本的同一 Python 环境安装依赖：
+
+```bash
+python -m pip install -r scripts/requirements-build.txt
+```
+
+`fonttools` 用于将中文字体转换为默认字重的静态资源，保留全部字形和现有显示效果；生成结果会缓存，应用运行时不依赖 Python。
+
 #### 1. Prebuild
 
 Downloads the core binary, GeoIP data, and fonts; builds the service-mode binary.
