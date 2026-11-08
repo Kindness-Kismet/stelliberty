@@ -12,10 +12,6 @@
     <HotAvaloniaMode>Aggressive</HotAvaloniaMode>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(AvaloniaMemoryOptimization)' == 'true'">
-    <DefineConstants>$(DefineConstants);AVALONIA_MEMORY_OPTIMIZATION</DefineConstants>
-  </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />

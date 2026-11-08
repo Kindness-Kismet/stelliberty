@@ -106,7 +106,6 @@ def parse_args() -> argparse.Namespace:
         help="Override app version for this build only (does not rewrite Directory.Build.props)",
     )
     parser.add_argument("--clean", action="store_true", help="Clean the target output directory before building")
-    parser.add_argument("--avalonia-source", metavar="PATH", help="Use the local Avalonia 12.1.4 memory optimizations for Windows x64")
     return parser.parse_args()
 
 
@@ -117,7 +116,6 @@ def create_build_request(args: argparse.Namespace) -> BuildRequest:
         metadata=resolve_metadata_version(read_app_metadata(), args.version),
         pack_format=args.pack,
         clean=args.clean,
-        avalonia_source=args.avalonia_source,
     )
 
 
