@@ -437,7 +437,7 @@ public sealed partial class App : Avalonia.Application
             return;
         }
 
-        if (mainWindow.IsVisible && mainWindow.WindowState != WindowState.Minimized)
+        if (mainWindow.IsVisible && !mainWindow.IsHidePreparing && mainWindow.WindowState != WindowState.Minimized)
         {
             if (mainWindow.CanExitToBackground)
             {

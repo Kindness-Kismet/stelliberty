@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 #if DEBUG
@@ -41,6 +42,8 @@ public sealed partial class MainWindow : Window
     private bool _isShutdownRequested;
     private bool _isShutdownPreparing;
     private bool _hasOpened;
+    private bool _isHidePreparing;
+    private long _hideRequestVersion;
     private long _pageTransitionVersion;
     private long _pageLoadingShownAt;
 #if DEBUG
@@ -775,6 +778,7 @@ public sealed partial class MainWindow : Window
     public void RequestShutdown()
     {
         if (_isShutdownRequested || _isShutdownPreparing) return;
+        CancelPendingHide();
         AppLogger.Info("Application exit requested");
         _isShutdownPreparing = true;
         CancelHiddenRelease();
@@ -783,13 +787,54 @@ public sealed partial class MainWindow : Window
 
     internal void HideToBackground()
     {
-        if (_isShutdownRequested || _isShutdownPreparing)
+        if (_isShutdownRequested || _isShutdownPreparing || _isHidePreparing || !IsVisible)
         {
             return;
         }
 
         _windowStateService.SaveNow();
+        if (WindowState == WindowState.Minimized
+            || !CaptionButtons.GetVisualDescendants().OfType<Button>().Any(button => button.IsPointerOver)
+            || ElementComposition.GetElementVisual(CaptionButtons) is not { } visual)
+        {
+            Hide();
+            return;
+        }
+
+        _isHidePreparing = true;
+        var version = ++_hideRequestVersion;
+        Classes.Add("preparing-hide");
+        _ = CompleteHideAsync(visual.Compositor, version);
+    }
+
+    public override void Show()
+    {
+        CancelPendingHide();
+        base.Show();
+    }
+
+    internal bool IsHidePreparing => _isHidePreparing;
+
+    private async Task CompleteHideAsync(Compositor compositor, long version)
+    {
+        // 系统恢复窗口会先显示旧缓冲，隐藏前必须完成一帧无悬停高亮的渲染。
+        await Dispatcher.UIThread.AwaitWithPriority(
+            compositor.RequestCompositionBatchCommitAsync().Rendered,
+            DispatcherPriority.Send);
+        if (version != _hideRequestVersion || _isShutdownRequested || _isShutdownPreparing)
+        {
+            return;
+        }
+
         Hide();
+        CancelPendingHide();
+    }
+
+    private void CancelPendingHide()
+    {
+        ++_hideRequestVersion;
+        _isHidePreparing = false;
+        Classes.Remove("preparing-hide");
     }
 
     internal Func<Task>? PrepareShutdownAsync { private get; set; }
@@ -863,6 +908,7 @@ public sealed partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        CancelPendingHide();
         SetPageLoadingVisible(false);
         CancelPendingPageTransition();
         CancelHiddenRelease();

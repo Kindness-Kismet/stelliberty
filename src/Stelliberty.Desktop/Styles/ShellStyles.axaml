@@ -85,6 +85,11 @@
     <Setter Property="Background" Value="{DynamicResource TitleBarCloseButtonHoverBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource AppOnDangerBrush}" />
   </Style>
+  <!-- 隐藏前提交普通标题栏画面，避免恢复窗口时短暂显示旧悬停颜色。 -->
+  <Style Selector="Window.preparing-hide Button.titlebar-button:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TitleBarButtonForegroundBrush}" />
+  </Style>
 
   <Style Selector="Border.debug-badge">
     <Setter Property="Margin" Value="12,0,0,0" />
