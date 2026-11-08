@@ -2,54 +2,42 @@ using System.Text;
 using Stelliberty.Application.Diagnostics;
 using Stelliberty.Desktop.Services;
 using Stelliberty.Infrastructure.Diagnostics;
+using Stelliberty.Infrastructure.Settings;
 
 namespace Stelliberty.Desktop;
 
 internal static class Program
 {
+    internal static bool ShowWindowOnStart { get; private set; }
+    internal static SingleInstanceService? SingleInstance { get; private set; }
+
     [STAThread]
     public static int Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
-        var launch = DesktopLaunchArguments.Parse(args);
-        if (launch is null)
+        var isSilent = args.Contains("--silent-start", StringComparer.Ordinal);
+        using var singleInstance = new SingleInstanceService();
+        if (!singleInstance.OwnsInstance)
         {
+            // Avalonia 必须使用入口 STA 线程；同步等待仅限第二个进程的激活请求。
+            return isSilent ? 0 : SingleInstanceService.ActivateExistingAsync().GetAwaiter().GetResult();
+        }
+
+        AppLogger.Configure(new CapturedAppLogger(DesktopApplicationLayout.RunningLogFilePath));
+        DependencyDirectoryService.Configure();
+        DesktopCoreAssets.Deploy();
+        var forceShow = args.Contains("--show-ui", StringComparer.Ordinal);
+        ShowWindowOnStart = !isSilent && (forceShow
+            || !new JsonAppSettingsStore(new DesktopPlatformDirectories()).Load().IsSilentStartEnabled);
+        SingleInstance = singleInstance;
+        try
+        {
+            AppRuntime.Run(args.Where(argument => argument is not "--silent-start" and not "--show-ui").ToArray());
             return 0;
-        }
-
-        using var traySession = new DesktopTraySession();
-        try
-        {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            // Avalonia 必须继续使用入口 STA 线程，因此只在进程边界同步等待托盘授权。
-            traySession.RegisterAsync(launch.TraySessionToken, timeout.Token).GetAwaiter().GetResult();
-            if (!traySession.CanExitToBackground)
-            {
-                return 1;
-            }
-        }
-        catch
-        {
-            return 1;
-        }
-
-        ConfigureUiProcess();
-        DesktopLaunchContext.TraySession = traySession;
-        try
-        {
-            AppRuntime.RunUi(launch.AvaloniaArguments);
         }
         finally
         {
-            DesktopLaunchContext.TraySession = null;
+            SingleInstance = null;
         }
-
-        return 0;
-    }
-
-    private static void ConfigureUiProcess()
-    {
-        AppLogger.Configure(new CapturedAppLogger(DesktopApplicationLayout.RunningLogFilePath));
-        DependencyDirectoryService.Configure();
     }
 }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <AssemblyName>$(AppName)_ui</AssemblyName>
+    <AssemblyName>$(AppName)</AssemblyName>
     <Version>$(AppVersion)</Version>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <HotAvaloniaAutoEnable>false</HotAvaloniaAutoEnable>
@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="12.1.4" PrivateAssets="All" Publish="True" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
@@ -36,7 +37,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="Assets\fonts\**" />
+    <AvaloniaResource Include="Assets\fonts\GoogleSans-Regular.ttf" />
+    <AvaloniaResource Include="Assets\fonts\NotoSansSC-Thin.ttf" />
   </ItemGroup>
 
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">

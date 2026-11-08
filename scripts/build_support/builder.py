@@ -1,7 +1,7 @@
 import os
+import shlex
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 from build_support.commands import run
@@ -9,7 +9,7 @@ from build_support.fonts import ensure_app_fonts
 from build_support.installer import pack_installers, pack_macos_app
 from build_support.layout import organize_dependency_directory, output_name, service_binary_name, zip_output
 from build_support.models import AppMetadata, BuildRequest, PlatformTarget
-from build_support.paths import BUILD_DIR, CORE_DIRECTORY, DESKTOP_PROJECT, PRE_ASSETS_DIR, ROOT, RUST_WORKSPACE, SERVICE_UPDATE_DIRECTORY, TRAY_PROJECT
+from build_support.paths import BUILD_DIR, CORE_DIRECTORY, DESKTOP_PROJECT, PRE_ASSETS_DIR, ROOT, RUST_WORKSPACE, SERVICE_UPDATE_DIRECTORY
 from build_support.processes import close_running_output_app
 from build_support.timer import timed_step
 
@@ -132,27 +132,15 @@ def build_rust(metadata: AppMetadata, configuration: str, target: PlatformTarget
     # 服务版本固定为 crate 版本，不随 App 版本漂移。
     env = {"STELLIBERTY_APP_NAME": metadata.app_name}
     if configuration == "release":
-        env.update(release_path_remap_env())
+        env.update(release_path_remap_env(target))
 
     run(command, env)
 
 def publish_dotnet(metadata: AppMetadata, configuration: str, target: PlatformTarget, output_dir: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="stelliberty-dotnet-publish-") as temp_dir:
-        staging_dir = Path(temp_dir)
-        tray_output = staging_dir / "tray"
-        ui_output = staging_dir / "ui"
-        publish_dotnet_project(TRAY_PROJECT, metadata, configuration, target, tray_output)
-        publish_dotnet_project(DESKTOP_PROJECT, metadata, configuration, target, ui_output)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(tray_output, output_dir, dirs_exist_ok=True)
-        shutil.copytree(ui_output, output_dir, dirs_exist_ok=True)
-
-
-def publish_dotnet_project(project: Path, metadata: AppMetadata, configuration: str, target: PlatformTarget, output_dir: Path) -> None:
     command = [
         "dotnet",
         "publish",
-        str(project),
+        str(DESKTOP_PROJECT),
         "--configuration",
         dotnet_configuration(configuration),
         "--runtime",
@@ -187,17 +175,26 @@ def reset_output_directory(output_dir: Path) -> None:
         shutil.rmtree(output_dir)
         print(f"  Removed {output_dir}", flush=True)
 
-def release_path_remap_env() -> dict[str, str]:
+def release_path_remap_env(target: PlatformTarget) -> dict[str, str]:
     separator = "\x1f"
-    remaps = [
-        rust_path_remap(ROOT, "."),
-        rust_path_remap(Path.home(), ".home"),
-    ]
     cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
-    remaps.append(rust_path_remap(cargo_home, ".cargo"))
+    prefixes = [(ROOT, "."), (Path.home(), ".home"), (cargo_home, ".cargo")]
+    remaps = [rust_path_remap(source, replacement) for source, replacement in prefixes]
     current = os.environ.get("CARGO_ENCODED_RUSTFLAGS")
     encoded = separator.join(remaps) if not current else f"{current}{separator}{separator.join(remaps)}"
-    return {"CARGO_ENCODED_RUSTFLAGS": encoded}
+    env = {"CARGO_ENCODED_RUSTFLAGS": encoded, "CC_SHELL_ESCAPED_FLAGS": "1"}
+    if target.rust_target.endswith("-msvc"):
+        options = ["/experimental:deterministic"]
+        options.extend(f"/pathmap:{source.resolve()}={replacement}" for source, replacement in prefixes)
+    else:
+        options = [f"-ffile-prefix-map={source.resolve()}={replacement}" for source, replacement in prefixes]
+    flags = " ".join(shlex.quote(option) for option in options)
+    # Rust 路径映射不覆盖 C/C++ 依赖；目标级参数避免被依赖的构建脚本覆盖。
+    for variable in ("CFLAGS", "CXXFLAGS"):
+        key = f"{variable}_{target.rust_target}"
+        current = os.environ.get(key, os.environ.get(key.replace("-", "_"), ""))
+        env[key] = f"{current} {flags}".strip()
+    return env
 
 def rust_path_remap(source: Path, target: str) -> str:
     return f"--remap-path-prefix={source.resolve()}={target}"

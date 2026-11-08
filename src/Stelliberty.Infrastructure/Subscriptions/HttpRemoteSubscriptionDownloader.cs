@@ -11,7 +11,8 @@ namespace Stelliberty.Infrastructure.Subscriptions;
 public sealed class HttpRemoteSubscriptionDownloader : IRemoteSubscriptionDownloader
 {
     private const int MaxSubscriptionContentBytes = 10 * 1024 * 1024;
-    private static readonly TimeSpan DownloadTimeout = TimeSpan.FromSeconds(10);
+    // 为订阅服务动态生成配置预留时间，响应等待和正文下载共用总时限。
+    private static readonly TimeSpan DownloadTimeout = TimeSpan.FromSeconds(60);
 
     private readonly Func<(string Host, int Port)> _coreProxyEndpointProvider;
 
@@ -68,38 +69,45 @@ public sealed class HttpRemoteSubscriptionDownloader : IRemoteSubscriptionDownlo
         message.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
         message.Headers.Pragma.Add(new NameValueHeaderValue("no-cache"));
 
-        HttpResponseMessage response;
         try
         {
-            response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, requestCancellationToken);
-        }
-        catch (HttpRequestException exception)
-        {
-            throw new HttpRequestException(
-                BuildTransportFailureMessage(request, exception),
-                null,
-                exception.StatusCode);
-        }
-
-        using (response)
-        {
-            if (!response.IsSuccessStatusCode)
+            HttpResponseMessage response;
+            try
             {
-                throw CreateResponseFailureException(request, response);
+                response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, requestCancellationToken);
+            }
+            catch (HttpRequestException exception)
+            {
+                throw new HttpRequestException(
+                    BuildTransportFailureMessage(request, exception),
+                    null,
+                    exception.StatusCode);
             }
 
-            await response.Content.LoadIntoBufferAsync(MaxSubscriptionContentBytes, requestCancellationToken);
-            var content = await HttpContentTextReader.ReadAsStringAsync(response.Content, requestCancellationToken);
-            if (LooksLikeHtmlDocument(content))
+            using (response)
             {
-                throw CreateUnexpectedHtmlResponseException(request, response);
-            }
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw CreateResponseFailureException(request, response);
+                }
 
-            var trafficInfo = response.Headers.TryGetValues("subscription-userinfo", out var values)
-                ? SubscriptionTrafficInfo.ParseHeader(values.FirstOrDefault() ?? string.Empty)
-                : null;
-            AppLogger.Info($"Remote subscription downloaded: proxy={request.ProxyMode}");
-            return new RemoteSubscriptionDownloadResult(content, trafficInfo);
+                await response.Content.LoadIntoBufferAsync(MaxSubscriptionContentBytes, requestCancellationToken);
+                var content = await HttpContentTextReader.ReadAsStringAsync(response.Content, requestCancellationToken);
+                if (LooksLikeHtmlDocument(content))
+                {
+                    throw CreateUnexpectedHtmlResponseException(request, response);
+                }
+
+                var trafficInfo = response.Headers.TryGetValues("subscription-userinfo", out var values)
+                    ? SubscriptionTrafficInfo.ParseHeader(values.FirstOrDefault() ?? string.Empty)
+                    : null;
+                AppLogger.Info($"Remote subscription downloaded: proxy={request.ProxyMode}");
+                return new RemoteSubscriptionDownloadResult(content, trafficInfo);
+            }
+        }
+        catch (OperationCanceledException) when (timeoutCancellation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Subscription download timed out after {DownloadTimeout.TotalSeconds:0} seconds: proxy={request.ProxyMode}");
         }
     }
 

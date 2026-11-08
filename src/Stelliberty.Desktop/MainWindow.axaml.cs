@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 #if DEBUG
@@ -27,17 +28,12 @@ namespace Stelliberty.Desktop;
 
 public sealed partial class MainWindow : Window
 {
-    // 隐藏后统一等待该时长：轻量模式结束 UI 进程，常规模式回收页面视觉树。
-    private static readonly TimeSpan HiddenReleaseDelay = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan PageLoadingMinVisible = TimeSpan.FromMilliseconds(300);
     private readonly WindowAppearanceService _windowAppearanceService = new();
     private readonly WindowStateService _windowStateService;
     private readonly SystemAccentColorService _systemAccentColorService = new();
     private readonly BitmapCache _proxyPageBitmapCache = new() { SnapsToDevicePixels = true };
     private readonly Dictionary<AppNavigationPage, ContentControl> _pageHosts = new();
-    private readonly Dictionary<AppNavigationPage, Dictionary<string, Vector>> _pageScrollOffsets = new();
-    private readonly DispatcherTimer _hiddenReleaseTimer;
-    private IReadOnlyDictionary<SettingsSubPage, Vector>? _settingsScrollOffsets;
     private bool _pageHostsReady;
     private ContentControl? _visiblePageHost;
     private ContentControl? _pendingPageHost;
@@ -45,8 +41,9 @@ public sealed partial class MainWindow : Window
     private AccentColorPickerView? _activeAccentPicker;
     private bool _isShutdownRequested;
     private bool _isShutdownPreparing;
-    private bool _shouldShutdownTray = true;
     private bool _hasOpened;
+    private bool _isHidePreparing;
+    private long _hideRequestVersion;
     private long _pageTransitionVersion;
     private long _pageLoadingShownAt;
 #if DEBUG
@@ -62,8 +59,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(IAppSettingsStore? settingsStore, AppSettings? settings)
     {
         _windowStateService = new WindowStateService(settingsStore, settings);
-        _hiddenReleaseTimer = new DispatcherTimer { Interval = HiddenReleaseDelay };
-        _hiddenReleaseTimer.Tick += OnHiddenReleaseTimerTick;
+        _hiddenReleaseTimer.Tick += OnHiddenReleaseTimerTickAsync;
         InitializeComponent();
         ApplyPlatformWindowDecorations();
         DataContextChanged += OnDataContextChanged;
@@ -110,6 +106,10 @@ public sealed partial class MainWindow : Window
 
     private void OnDataContextChanged(object? sender, EventArgs args)
     {
+        if (_hibernatedShell is not null && _shellDataContextWasInherited)
+        {
+            _hibernatedShell.DataContext = DataContext;
+        }
         DetachViewModel();
 
         if (DataContext is MainWindowViewModel viewModel)
@@ -306,7 +306,6 @@ public sealed partial class MainWindow : Window
         ShowPageHost(host);
         _visiblePageHost = host;
         ActivatePageHost(host);
-        PreparePageLayout(page, host);
     }
 
     private void AnimatePageTransition(AppNavigationPage page)
@@ -425,7 +424,6 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        PreparePageLayout(_attachedViewModel!.CurrentPage, nextHost);
         SetPageLoadingVisible(false);
         _pendingPageHost = null;
         _visiblePageHost = nextHost;
@@ -616,9 +614,15 @@ public sealed partial class MainWindow : Window
 
         try
         {
+            CancelHiddenRelease();
+            RestoreHiddenShell();
             _windowAppearanceService.Reapply();
             _systemAccentColorService.Reapply();
             RebuildNavigationViewsAfterHotReload();
+            if (!IsVisible)
+            {
+                _hiddenReleaseTimer.Start();
+            }
             AppLogger.Info("Hot reload recovered theme, accent color, and page view cache");
         }
         catch (Exception exception)
@@ -773,36 +777,64 @@ public sealed partial class MainWindow : Window
 
     public void RequestShutdown()
     {
-        BeginShutdown(shouldShutdownTray: true);
-    }
-
-    internal void RequestUiShutdown()
-    {
-        BeginShutdown(shouldShutdownTray: false);
+        if (_isShutdownRequested || _isShutdownPreparing) return;
+        CancelPendingHide();
+        AppLogger.Info("Application exit requested");
+        _isShutdownPreparing = true;
+        CancelHiddenRelease();
+        _ = PrepareAndShutdownAsync();
     }
 
     internal void HideToBackground()
     {
-        if (_isShutdownRequested || _isShutdownPreparing)
+        if (_isShutdownRequested || _isShutdownPreparing || _isHidePreparing || !IsVisible)
         {
             return;
         }
 
         _windowStateService.SaveNow();
-        Hide();
+        if (WindowState == WindowState.Minimized
+            || !CaptionButtons.GetVisualDescendants().OfType<Button>().Any(button => button.IsPointerOver)
+            || ElementComposition.GetElementVisual(CaptionButtons) is not { } visual)
+        {
+            Hide();
+            return;
+        }
+
+        _isHidePreparing = true;
+        var version = ++_hideRequestVersion;
+        Classes.Add("preparing-hide");
+        _ = CompleteHideAsync(visual.Compositor, version);
     }
 
-    private void BeginShutdown(bool shouldShutdownTray)
+    public override void Show()
     {
-        if (_isShutdownRequested || _isShutdownPreparing)
+        CancelPendingHide();
+        base.Show();
+    }
+
+    internal bool IsHidePreparing => _isHidePreparing;
+
+    private async Task CompleteHideAsync(Compositor compositor, long version)
+    {
+        // 系统恢复窗口会先显示旧缓冲，隐藏前必须完成一帧无悬停高亮的渲染。
+        await Dispatcher.UIThread.AwaitWithPriority(
+            compositor.RequestCompositionBatchCommitAsync().Rendered,
+            DispatcherPriority.Send);
+        if (version != _hideRequestVersion || _isShutdownRequested || _isShutdownPreparing)
         {
             return;
         }
 
-        _shouldShutdownTray = shouldShutdownTray;
-        AppLogger.Info(shouldShutdownTray ? "Application exit requested" : "Desktop UI exit requested");
-        _isShutdownPreparing = true;
-        _ = PrepareAndShutdownAsync();
+        Hide();
+        CancelPendingHide();
+    }
+
+    private void CancelPendingHide()
+    {
+        ++_hideRequestVersion;
+        _isHidePreparing = false;
+        Classes.Remove("preparing-hide");
     }
 
     internal Func<Task>? PrepareShutdownAsync { private get; set; }
@@ -811,7 +843,7 @@ public sealed partial class MainWindow : Window
 
     internal bool IsShutdownPreparing => _isShutdownPreparing;
 
-    internal bool ShouldShutdownTray => _shouldShutdownTray;
+    internal bool IsShutdownReady => _isShutdownRequested;
 
     internal bool CanExitToBackground { get; set; }
 
@@ -850,8 +882,7 @@ public sealed partial class MainWindow : Window
 
     private async Task PrepareAndShutdownAsync()
     {
-        var scope = _shouldShutdownTray ? "Application" : "Desktop UI";
-        AppLogger.Info($"{scope} exit preparation started");
+        AppLogger.Info("Application exit preparation started");
         try
         {
             if (PrepareShutdownAsync is not null)
@@ -864,7 +895,7 @@ public sealed partial class MainWindow : Window
             AppLogger.Warning($"Application exit preparation failed: {exception.Message}");
         }
 
-        AppLogger.Info($"{scope} exit preparation completed");
+        AppLogger.Info("Application exit preparation completed");
         var desktop = Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
         var requiresExplicitShutdown = desktop?.ShutdownMode == ShutdownMode.OnExplicitShutdown;
         _isShutdownRequested = true;
@@ -877,13 +908,15 @@ public sealed partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        CancelPendingHide();
         SetPageLoadingVisible(false);
         CancelPendingPageTransition();
-        _hiddenReleaseTimer.Stop();
-        _hiddenReleaseTimer.Tick -= OnHiddenReleaseTimerTick;
+        CancelHiddenRelease();
+        _hiddenReleaseTimer.Tick -= OnHiddenReleaseTimerTickAsync;
         CloseAccentPicker();
         _visiblePageHost = null;
         ClearPageHostContents();
+        _hibernatedShell = null;
         if (TryGetPageConverter(out var converter))
         {
             converter.ClearCache();
@@ -915,124 +948,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // 隐藏回收前记录滚动位置，重建后按 AutomationId 还原。
-    private void CapturePageScrollOffsets()
-    {
-        foreach (var (page, host) in _pageHosts)
-        {
-            if (page == AppNavigationPage.Settings || host.Content is not Control content)
-            {
-                continue;
-            }
-
-            // 尚未重建的页面保留上次快照，已重建的页面以当前状态覆盖。
-            _pageScrollOffsets.Remove(page);
-            var offsets = content.GetVisualDescendants()
-                .OfType<ScrollViewer>()
-                .Select(scrollViewer => (Id: AutomationProperties.GetAutomationId(scrollViewer), scrollViewer.Offset))
-                .Where(item => !string.IsNullOrWhiteSpace(item.Id) && (item.Offset.X > 0 || item.Offset.Y > 0))
-                .ToDictionary(item => item.Id!, item => item.Offset, StringComparer.Ordinal);
-            if (offsets.Count > 0)
-            {
-                _pageScrollOffsets[page] = offsets;
-            }
-        }
-
-        if (_pageHosts.TryGetValue(AppNavigationPage.Settings, out var settingsHost)
-            && settingsHost.Content is SettingsView settingsView)
-        {
-            _settingsScrollOffsets = settingsView.CaptureScrollOffsets();
-        }
-    }
-
-    private void PreparePageLayout(AppNavigationPage page, ContentControl host)
-    {
-        if (page == AppNavigationPage.Settings && host.Content is SettingsView settingsView)
-        {
-            if (_settingsScrollOffsets is null)
-            {
-                return;
-            }
-
-            host.UpdateLayout();
-            settingsView.RestoreScrollOffsets(_settingsScrollOffsets);
-            _settingsScrollOffsets = null;
-            return;
-        }
-
-        if (!_pageScrollOffsets.Remove(page, out var offsets)
-            || host.Content is not Control content)
-        {
-            return;
-        }
-
-        host.UpdateLayout();
-        var restoredCount = 0;
-        foreach (var scrollViewer in content.GetVisualDescendants().OfType<ScrollViewer>())
-        {
-            var automationId = AutomationProperties.GetAutomationId(scrollViewer);
-            if (automationId is null || !offsets.TryGetValue(automationId, out var offset))
-            {
-                continue;
-            }
-
-            scrollViewer.Offset = offset;
-            restoredCount++;
-        }
-
-        if (restoredCount > 0)
-        {
-            host.UpdateLayout();
-        }
-    }
-
-    private void OnHiddenReleaseTimerTick(object? sender, EventArgs args)
-    {
-        _hiddenReleaseTimer.Stop();
-        if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
-        {
-            return;
-        }
-
-        if (DataContext is MainWindowViewModel { AppBehavior.IsLightweightModeEnabled: true })
-        {
-            RequestUiShutdown();
-            return;
-        }
-
-        ReleaseHiddenPageViews();
-    }
-
-    private void ReleaseHiddenPageViews()
-    {
-        CapturePageScrollOffsets();
-        _visiblePageHost = null;
-        ClearPageHostContents();
-        var releasedViewCount = 0;
-        if (TryGetPageConverter(out var converter))
-        {
-            releasedViewCount = converter.ClearCache();
-        }
-
-        if (releasedViewCount > 0)
-        {
-            AppLogger.Debug($"Released {releasedViewCount} hidden page views");
-        }
-
-        Dispatcher.UIThread.Post(CollectHiddenMemory, DispatcherPriority.Background);
-    }
-
-    private void CollectHiddenMemory()
-    {
-        if (IsVisible || _isShutdownRequested || _isShutdownPreparing)
-        {
-            return;
-        }
-
-        // 等视觉树解除引用后再压缩托管堆，窗口重新显示时跳过。
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-    }
-
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs args)
     {
         if (args.Property == WindowStateProperty)
@@ -1045,9 +960,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        CancelHiddenRelease();
         if (IsVisible)
         {
-            _hiddenReleaseTimer.Stop();
+            RestoreHiddenShell();
             if (_attachedViewModel is not null)
             {
                 // 隐藏可能中断首次加载，恢复时按当前导航重建完整显示状态。
@@ -1064,7 +980,6 @@ public sealed partial class MainWindow : Window
 
         CancelPendingPageTransition();
         DeactivatePageHost(_visiblePageHost);
-        _hiddenReleaseTimer.Stop();
         _hiddenReleaseTimer.Start();
     }
 

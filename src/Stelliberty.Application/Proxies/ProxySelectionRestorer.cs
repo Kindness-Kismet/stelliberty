@@ -81,7 +81,7 @@ public sealed class ProxySelectionRestorer(
 
                 if (group.UsesFixedSelection)
                 {
-                    // 重建界面不能清除用户刚从托盘固定的节点。
+                    // 同步界面时保留当前核心的固定节点。
                     if (preserveFixedSelections) continue;
                     // 核心重建时清空固定选择，避免 store-selected 恢复旧固定项。
                     var cleared = await coreClient.ClearProxySelectionAsync(group.Name, cancellationToken);

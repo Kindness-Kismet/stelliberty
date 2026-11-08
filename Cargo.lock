@@ -1705,7 +1705,7 @@ dependencies = [
 
 [[package]]
 name = "stelliberty_service"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "anyhow",
  "hub",

@@ -492,8 +492,6 @@
   "Settings.AppBehavior.SilentStart": "靜默啟動",
   "Settings.AppBehavior.SilentStart.Description": "啟動時，隱藏視窗",
   "Settings.AppBehavior.MinimizeToTray": "關閉時最小化到系統匣",
-  "Settings.AppBehavior.LightweightMode": "輕量模式",
-  "Settings.AppBehavior.LightweightMode.Description": "隱藏視窗一段時間後減少記憶體用量，但再次顯示會變慢",
   "Settings.AppBehavior.TrayDoubleClick": "滑鼠左鍵雙擊顯示/隱藏視窗",
   "Settings.AppBehavior.TrayDoubleClick.Description": "關閉後，變更為單擊行為",
   "Settings.AppBehavior.LazyMode": "懶惰模式",

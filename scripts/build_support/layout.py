@@ -1,10 +1,11 @@
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 from build_support.models import AppMetadata
 from build_support.models import PlatformTarget
-from build_support.paths import DEPS_DIRECTORY
+from build_support.paths import BUILD_DIR, DEPS_DIRECTORY
 
 HUB_LIBRARY_NAMES = {"hub.dll", "libhub.so", "libhub.dylib"}
 HUB_SYMBOL_NAMES = {"hub.pdb", "libhub.pdb"}
@@ -68,24 +69,28 @@ def organize_dependency_directory(output_dir: Path, metadata: AppMetadata, confi
     deps_dir.mkdir(parents=True, exist_ok=True)
 
     remove_release_symbols(output_dir, configuration)
-    move_ui_host_files(output_dir, deps_dir, metadata)
+    archive_legacy_ui_host_files(output_dir, metadata)
     moved_files = move_dependency_files(output_dir, deps_dir, root_files(metadata), configuration)
     rewrite_dependency_manifest(output_dir / f"{metadata.app_name}.deps.json", moved_files)
 
 
 def root_files(metadata: AppMetadata) -> set[str]:
-    tray_name = metadata.app_name
+    app_name = metadata.app_name
     return HOST_STARTUP_FILE_NAMES | {
-        tray_name,
-        f"{tray_name}.dll",
-        f"{tray_name}.exe",
-        f"{tray_name}.deps.json",
-        f"{tray_name}.pdb",
-        f"{tray_name}.runtimeconfig.json",
+        app_name,
+        f"{app_name}.dll",
+        f"{app_name}.exe",
+        f"{app_name}.deps.json",
+        f"{app_name}.pdb",
+        f"{app_name}.runtimeconfig.json",
     }
 
 
-def move_ui_host_files(output_dir: Path, deps_dir: Path, metadata: AppMetadata) -> None:
+def archive_legacy_ui_host_files(output_dir: Path, metadata: AppMetadata) -> None:
+    resolved_output = output_dir.resolve()
+    if not resolved_output.is_relative_to(BUILD_DIR.resolve()):
+        raise ValueError(f"Refusing to move legacy host files outside the build directory: {resolved_output}")
+
     ui_name = f"{metadata.app_name}_ui"
     file_names = {
         ui_name,
@@ -95,15 +100,26 @@ def move_ui_host_files(output_dir: Path, deps_dir: Path, metadata: AppMetadata) 
         f"{ui_name}.pdb",
         f"{ui_name}.runtimeconfig.json",
     }
-    for file_name in file_names:
-        source = output_dir / file_name
-        if not source.exists():
-            continue
+    legacy_files = [
+        directory / file_name
+        for directory in (resolved_output, resolved_output / DEPS_DIRECTORY)
+        for file_name in sorted(file_names)
+        if (directory / file_name).is_file()
+    ]
+    if not legacy_files:
+        return
 
-        target = deps_dir / file_name
-        if target.exists():
-            target.unlink()
+    # 旧双进程产物移出发布目录并保留备份，避免增量构建继续打包废弃入口。
+    backup_root = BUILD_DIR / "legacy-host-backups"
+    backup_root.mkdir(parents=True, exist_ok=True)
+    backup_dir = Path(tempfile.mkdtemp(prefix=f"{output_dir.name}-", dir=backup_root))
+    for source in legacy_files:
+        if not source.resolve().is_relative_to(resolved_output):
+            raise ValueError(f"Refusing to move a legacy host outside the output directory: {source}")
+        target = backup_dir / source.relative_to(resolved_output)
+        target.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(source), target)
+    print(f"  Legacy host backup {backup_dir}", flush=True)
 
 
 def remove_release_symbols(output_dir: Path, configuration: str) -> None:

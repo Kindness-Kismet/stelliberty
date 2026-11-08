@@ -92,7 +92,7 @@ class PostBuildTests:
             self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=false"]),
             self.require("window.state", contains=["visible=true"]),
         ))
-        self.step("Toggle UI through the tray shortcut after recording", self.verify_window_shortcut)
+        self.step("Toggle the window through the shortcut after recording", self.verify_window_shortcut)
         self.step("Restore shortcut setting", self.restore_window_shortcut)
         self.step("Close app after shortcut verification", self.stop_app_step)
 
@@ -268,7 +268,7 @@ class PostBuildTests:
         core_dir = self.app_data_dir / "core"
         required = [
             self.app_data_dir / "settings.json",
-            self.app_data_dir / "applogs" / "tray-running.logs",
+            self.app_running_log_path,
             core_dir / self.core_binary_name,
             *(core_dir / name for name in sorted(CORE_ASSET_NAMES)),
         ]
@@ -495,7 +495,7 @@ class PostBuildTests:
                 kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             else:
                 kwargs["start_new_session"] = True
-            self.app_process = subprocess.Popen([str(self.app_exec), "--show-ui"], **kwargs)
+            self.app_process = subprocess.Popen([str(self.app_exec)], **kwargs)
 
         self.wait_debug_ready()
 
@@ -509,7 +509,7 @@ class PostBuildTests:
             return
 
         try:
-            self.tray_command("stop")
+            self.command("app.quit", visible=False, allow_disconnect=True)
             self.wait_for_app_exit(timeout=15)
         except Exception:
             pass
@@ -535,55 +535,20 @@ class PostBuildTests:
             time.sleep(0.5)
         raise PostBuildTestError("Debug port was not ready within 60s")
 
-    def tray_command(self, command: str):
-        result = subprocess.run(
-            [str(self.app_exec), "--debug-command", command], cwd=self.app_output, env=self.env,
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if self.os_family == "windows" else 0)
-        if result.returncode:
-            raise PostBuildTestError(result.stderr.strip() or "Tray command failed")
-        return json.loads(result.stdout)
-
-    def wait_ui_closed(self) -> dict:
-        # 隐藏回收等待 60 秒，另留 15 秒完成会话注销。
-        deadline = time.monotonic() + 75
-        while time.monotonic() < deadline:
-            state = self.tray_command("state")
-            if state["UiPid"] is None:
-                return state
-            time.sleep(0.2)
-        raise PostBuildTestError("UI session remained registered after closing the window")
-
     def verify_window_shortcut(self) -> None:
         self.require("control.click Navigation.HomeButton")
         time.sleep(0.6)
-        lightweight_mode = self.state_value(self.require("settings.app-behavior.state"), "lightweightMode") == "true"
-        before = self.tray_command("state")
-        self.command("hotkey.trigger window", allow_disconnect=True)
+        before = json.loads(self.require("core.state"))
+        self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=true"])
         self.wait_for("window.state", contains=["visible=false"], timeout=15, interval=0.1)
+        self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=false"])
+        self.require("window.state", contains=["visible=false"])
         # 连续触发需越过快捷键的 500 毫秒防重复间隔。
         time.sleep(0.6)
-        if not self.tray_command("toggle-window"):
-            raise PostBuildTestError("The tray shortcut could not reopen the UI before release")
+        self.require("hotkey.trigger window", contains=["action=ToggleWindow", "activated=true"])
         self.wait_for("window.state", contains=["visible=true"], timeout=15, interval=0.1)
-        reopened = self.tray_command("state")
-        if before["UiPid"] != reopened["UiPid"]:
-            raise PostBuildTestError("Reopening before the hidden delay did not reuse the UI process")
-        time.sleep(0.6)
-        self.command("hotkey.trigger window", allow_disconnect=True)
-        if lightweight_mode:
-            self.wait_ui_closed()
-        else:
-            self.wait_for("window.state", contains=["visible=false"], timeout=15, interval=0.1)
-        time.sleep(0.6)
-        if not self.tray_command("toggle-window"):
-            raise PostBuildTestError("The tray shortcut could not reopen the UI")
-        self.wait_debug_ready()
-        after = self.tray_command("state")
-        ui_recreated = before["UiPid"] != after["UiPid"]
-        if before["TrayPid"] != after["TrayPid"] or ui_recreated != lightweight_mode:
-            raise PostBuildTestError("The shortcut did not follow the lightweight mode preference")
-        if before["Core"]["Snapshot"]["Pid"] != after["Core"]["Snapshot"]["Pid"]:
+        after = json.loads(self.require("core.state"))
+        if before["pid"] != after["pid"]:
             raise PostBuildTestError("Hiding the UI unexpectedly restarted the core")
 
     def try_probe_port(self) -> bool:

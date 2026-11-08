@@ -6,48 +6,58 @@ internal static class DesktopApplicationLayout
 {
     private static string BaseDirectory => AppContext.BaseDirectory;
 
-    private static string InstallRootDirectory
-    {
-        get
-        {
-            var baseDirectory = new DirectoryInfo(BaseDirectory);
-            // 发布版 UI 位于 data/deps，所有安装资源仍以发布根目录为基准。
-            if (baseDirectory.Name == PathConventions.DepsSubdirectory
-                && baseDirectory.Parent is { Name: PathConventions.DataDirectoryName, Parent: { } installRoot })
-            {
-                return installRoot.FullName;
-            }
+    private static string InstallDataDirectory => Path.Combine(BaseDirectory, PathConventions.DataDirectoryName);
 
-            return BaseDirectory;
-        }
-    }
+    public static string DepsDirectory => Path.Combine(
+        InstallDataDirectory,
+        PathConventions.DepsSubdirectory);
 
-    private static string InstallDataDirectory => Path.Combine(InstallRootDirectory, PathConventions.DataDirectoryName);
-
-    // 安装资源随版本替换，macOS/Linux 用户数据固定在用户目录。
     public static string AppDataDirectory => AppDataDirectoryResolver.Resolve(
-        InstallRootDirectory,
+        BaseDirectory,
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         isPortable: OperatingSystem.IsWindows());
 
-    public static string DepsDirectory => Path.Combine(InstallDataDirectory, PathConventions.DepsSubdirectory);
+    // 安装载体随包分发的核心与 Geo 资源，只读。
+    public static string InstallCoreDirectory => Path.Combine(InstallDataDirectory, PathConventions.CoreSubdirectory);
 
-    // mihomo 工作目录与实际运行的核心，由托盘启动时从安装载体部署。
+    // mihomo 工作目录与实际运行的核心；Windows 便携安装时与 InstallCoreDirectory 重合。
     public static string CoreDirectory => Path.Combine(AppDataDirectory, PathConventions.CoreSubdirectory);
 
-    public static string CoreBinaryPath => Path.Combine(CoreDirectory, CoreBinaryName);
+    public static string CoreBinaryPath => Path.Combine(
+        CoreDirectory,
+        OperatingSystem.IsWindows() ? "clash-mihomo-core.exe" : "clash-mihomo-core");
 
     public static string RuntimeDirectory => Path.Combine(AppDataDirectory, PathConventions.RuntimeSubdirectory);
 
-    public static string AppLogsDirectory => Path.Combine(AppDataDirectory, PathConventions.AppLogsSubdirectory);
+    public static string ServiceDirectory => Path.Combine(AppDataDirectory, PathConventions.ServiceSubdirectory);
 
-    public static string RunningLogFilePath => Path.Combine(AppLogsDirectory, PathConventions.RunningLogFileName);
+    public static string ServiceLogFilePath => Path.Combine(ServiceDirectory, "service.logs");
 
-    public static string TrayRunningLogFilePath => Path.Combine(AppLogsDirectory, PathConventions.TrayRunningLogFileName);
+    public static string PreviousServiceLogFilePath => Path.Combine(ServiceDirectory, "service.previous.logs");
+
+    public static string ServiceUpdateDirectory => Path.Combine(
+        InstallDataDirectory,
+        PathConventions.ServiceSubdirectory,
+        PathConventions.ServiceUpdateSubdirectory);
+
+    public static string ServiceUpdateBinaryPath => Path.Combine(
+        ServiceUpdateDirectory,
+        AppRuntimeNames.ServiceBinaryName);
+
+    public static string ServiceInstalledBinaryPath => Path.Combine(
+        ServiceDirectory,
+        OperatingSystem.IsWindows()
+            ? $"{PathConventions.ServiceInstalledBinaryStem}.exe"
+            : PathConventions.ServiceInstalledBinaryStem);
 
     public static string SettingsFilePath => Path.Combine(AppDataDirectory, PathConventions.SettingsFileName);
 
-    public static string TrayBinaryPath => Path.Combine(InstallRootDirectory, AppRuntimeNames.TrayBinaryName);
+    public static string DesktopBinaryPath => Path.Combine(BaseDirectory, AppRuntimeNames.DesktopBinaryName);
 
-    private static string CoreBinaryName => OperatingSystem.IsWindows() ? "clash-mihomo-core.exe" : "clash-mihomo-core";
+    public static string AppLogsDirectory => Path.Combine(AppDataDirectory, PathConventions.AppLogsSubdirectory);
+
+    public static string RunningLogFilePath => Path.Combine(
+        AppDataDirectory,
+        PathConventions.AppLogsSubdirectory,
+        PathConventions.RunningLogFileName);
 }

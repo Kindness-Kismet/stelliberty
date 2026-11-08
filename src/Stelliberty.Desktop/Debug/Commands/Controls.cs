@@ -1,5 +1,7 @@
 #if DEBUG
 using System.Globalization;
+using System.Text.Json;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -53,6 +55,22 @@ internal static partial class DebugCommands
         if (command.StartsWith("control.get text ", StringComparison.OrdinalIgnoreCase))
         {
             return ReadControlText(window, command["control.get text ".Length..].Trim());
+        }
+
+        if (command.StartsWith("control.get pointer ", StringComparison.OrdinalIgnoreCase))
+        {
+            var control = FindControlByAutomationId(window, command["control.get pointer ".Length..].Trim());
+            var center = control.PointToScreen(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2));
+            return JsonSerializer.Serialize(new
+            {
+                WindowVisible = window.IsVisible,
+                control.IsPointerOver,
+                IsPressed = control is Button { IsPressed: true },
+                Background = (control as Button)?.Background?.ToString(),
+                X = center.X,
+                Y = center.Y,
+                WindowHandle = window.TryGetPlatformHandle()?.Handle.ToInt64(),
+            });
         }
 
         if (command.StartsWith("dropdown.list items ", StringComparison.OrdinalIgnoreCase))

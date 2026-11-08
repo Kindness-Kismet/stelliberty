@@ -158,6 +158,10 @@ pub fn heartbeat() -> Result<()> {
 
 pub fn logs(lines: Option<usize>) -> Result<()> {
     let line_count = lines.unwrap_or_else(crate::logging::default_line_count);
+    if line_count == 0 {
+        println!("no logs");
+        return Ok(());
+    }
     match send_service_command(
         ServiceCommand::Logs { lines: line_count },
         Duration::from_secs(2),
@@ -174,7 +178,17 @@ pub fn logs(lines: Option<usize>) -> Result<()> {
             Ok(())
         }
         Ok(other) => bail!("Unexpected log response: {other:?}"),
-        Err(e) => bail!("Service logs are unavailable: {e:#}"),
+        Err(error) => {
+            let lines = crate::logging::persisted(line_count)
+                .context("Failed to read persisted service logs")?;
+            if lines.is_empty() {
+                bail!("Service logs are unavailable: {error:#}");
+            }
+            for line in lines {
+                println!("{line}");
+            }
+            Ok(())
+        }
     }
 }
 

@@ -163,7 +163,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, IDisposable
         SystemIntegration.ToastRequested += OnToastRequested;
         HomePage.ToastRequested += OnToastRequested;
         Update.ToastRequested += OnToastRequested;
-        // TUN 权限由托盘判定，界面只同步结果。
+        // TUN 权限由运行宿主判定，界面同步结果。
         HomePage.ApplyTunState(_settings.IsTunEnabled);
         // 模式偏好是应用级状态；先注入主页和代理基线，再加载订阅。
         HomePage.ApplyOutboundMode(OutboundModeParser.TryParse(_settings.OutboundMode) ?? Domain.Proxies.OutboundMode.Rule);

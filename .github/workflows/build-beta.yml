@@ -219,6 +219,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install Python build dependencies
+        run: python -m pip install -r scripts/requirements-build.txt
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:

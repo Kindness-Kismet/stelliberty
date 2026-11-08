@@ -34,8 +34,6 @@ public sealed class AppSettings
 
     public bool IsMinimizeToTrayEnabled { get; set; }
 
-    public bool IsLightweightModeEnabled { get; set; }
-
     public bool IsTrayDoubleClickEnabled { get; set; } = true;
 
     public bool IsLazyModeEnabled { get; set; }
