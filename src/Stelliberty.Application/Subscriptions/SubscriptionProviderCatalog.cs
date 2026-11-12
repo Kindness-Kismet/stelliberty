@@ -8,8 +8,6 @@ public sealed class SubscriptionProviderCatalog(
 {
     public SubscriptionProviderSnapshot? Snapshot { get; } = snapshot;
 
-    private readonly List<string> _syncedProviderNames = [];
-
     public IReadOnlyList<SubscriptionProvider> VisibleProviders => providers.Where(item => item.IsVisible).ToList();
 
     public IReadOnlyList<SubscriptionProvider> Search(string keyword)
@@ -17,17 +15,6 @@ public sealed class SubscriptionProviderCatalog(
         return VisibleProviders
             .Where(item => Contains(item.Name, keyword) || Contains(item.Path, keyword))
             .ToList();
-    }
-
-    public void MarkSynced(IReadOnlyList<string> providerNames)
-    {
-        foreach (var providerName in providerNames)
-        {
-            if (!_syncedProviderNames.Contains(providerName))
-            {
-                _syncedProviderNames.Add(providerName);
-            }
-        }
     }
 
     public async Task<SubscriptionProviderSyncResult> SyncProviderAsync(string providerName, CancellationToken cancellationToken = default)
@@ -38,13 +25,12 @@ public sealed class SubscriptionProviderCatalog(
             return new SubscriptionProviderSyncResult([], []);
         }
 
-        if (!provider.CanSync || syncer is null || _syncedProviderNames.Contains(provider.Name))
+        if (!provider.CanSync || syncer is null)
         {
             return new SubscriptionProviderSyncResult([], [provider.Name]);
         }
 
         await syncer.SyncAsync(provider, cancellationToken);
-        _syncedProviderNames.Add(provider.Name);
         return new SubscriptionProviderSyncResult([provider.Name], []);
     }
 
@@ -67,7 +53,7 @@ public sealed class SubscriptionProviderCatalog(
 
         foreach (var provider in providers)
         {
-            if (!provider.CanSync || syncer is null || _syncedProviderNames.Contains(provider.Name))
+            if (!provider.CanSync || syncer is null)
             {
                 skipped.Add(provider.Name);
                 continue;
@@ -88,7 +74,6 @@ public sealed class SubscriptionProviderCatalog(
                 continue;
             }
 
-            _syncedProviderNames.Add(provider.Name);
             synced.Add(provider.Name);
         }
 

@@ -259,7 +259,6 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
         _catalog = catalog;
         _providers.Clear();
         _providers.AddRange(catalog.VisibleProviders.Select(ToProviderItem));
-        catalog.MarkSynced(_syncedProviderNames);
         foreach (var providerName in _syncedProviderNames.ToList())
         {
             MarkProviderSynced(providerName);
@@ -428,7 +427,7 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
                 await ApplyProviderSyncResultAsync(result, session);
                 if (session == _selectorSession)
                 {
-                    _hasSyncedAllHttpProviders = true;
+                    _hasSyncedAllHttpProviders = result.FailedProviderNames.Count == 0;
                     if (result.FailedProviderNames.Count > 0)
                     {
                         ShowErrorToast(string.Format(
@@ -479,6 +478,9 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
     {
         if (isSyncing)
         {
+            _syncedProviderNames.Remove(providerName);
+            _hasSyncedAllHttpProviders = false;
+            _hasRefreshedAfterSync = false;
             if (!_syncingProviderNames.Contains(providerName))
             {
                 _syncingProviderNames.Add(providerName);
@@ -492,7 +494,11 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
         var index = _providers.FindIndex(item => item.Name == providerName);
         if (index >= 0)
         {
-            _providers[index] = _providers[index] with { IsSyncing = isSyncing };
+            _providers[index] = _providers[index] with
+            {
+                IsSyncing = isSyncing,
+                IsSynced = !isSyncing && _providers[index].IsSynced
+            };
         }
 
         RaiseProviderStateChanged();
@@ -501,12 +507,23 @@ public sealed class SubscriptionProviderViewModel : ViewModelBase, IDisposable
     private void SetSyncingAll(bool isSyncingAll)
     {
         _isSyncingAll = isSyncingAll;
-        // 已同步行会被 SyncAllAsync 跳过，且不显示转圈。
+        if (isSyncingAll)
+        {
+            // 成功标记仅表示本次结果，不能阻止后续同步。
+            _syncedProviderNames.Clear();
+            _hasSyncedAllHttpProviders = false;
+            _hasRefreshedAfterSync = false;
+        }
+
         for (var index = 0; index < _providers.Count; index++)
         {
             if (_providers[index].CanSync)
             {
-                _providers[index] = _providers[index] with { IsSyncing = isSyncingAll && !_providers[index].IsSynced };
+                _providers[index] = _providers[index] with
+                {
+                    IsSyncing = isSyncingAll,
+                    IsSynced = !isSyncingAll && _providers[index].IsSynced
+                };
             }
         }
 
