@@ -1,27 +1,25 @@
 ## Summary
 
-<!-- One or two sentences describing what this PR does -->
+<!-- Describe the concrete problem and final behavior in English. -->
+<!-- Use an English Conventional Commit title: type(scope): summary, or type: summary for one cross-module goal. -->
+<!-- Release preparation: chore(release): prepare v<version>; include base version -> target version here. -->
 
-## Change Type
+## Branches
 
-- [ ] New feature
-- [ ] Bug fix
-- [ ] Refactor
-- [ ] Documentation
-- [ ] Other:
+<!-- State the actual source repository/head -> target repository/base. -->
+<!-- Contributions target beta. Only the repository owner may promote this repository's beta to main. -->
 
-## Checklist
+## Validation
 
-- [ ] Wrapped new or changed business logic in `src/Stelliberty.Desktop/Debug`
-- [ ] Added `AutomationId` for new interactive controls
-- [ ] Added or updated Pre-build Tests or Post-build Tests
-- [ ] Passed `python scripts/test.py --all`
-- [ ] Ran formatter (`dotnet format` / `cargo fmt`)
+<!-- List relevant commands or manual checks with actual results and material limitations. -->
+<!-- Use builds, existing tests, or app debugging as appropriate. Add or change test code only when explicitly requested. -->
+<!-- For affected code: maintain debug commands and AutomationIds, and run dotnet format / cargo fmt as applicable. -->
 
-## Testing
+## Related Issues
 
-<!-- How to verify this change? List test commands or manual steps -->
+<!-- Use Closes only after checking that this PR fully resolves the issue; otherwise use a normal reference. -->
 
 ## Notes
 
-<!-- Optional: screenshots, perf data, migration notes -->
+<!-- Optional reviewer-relevant screenshots, performance data, or migration steps. Remove unused sections. -->
+<!-- Keep local instructions and work logs out of the PR. Use repository-relative paths and redact private data from attachments. -->
