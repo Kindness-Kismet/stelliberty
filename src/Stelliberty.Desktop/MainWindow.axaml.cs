@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 #if DEBUG
 using HotAvalonia;
+using Stelliberty.Desktop.Debug;
 #endif
 using Stelliberty.Application.Diagnostics;
 using Stelliberty.Application.Platform;
@@ -49,6 +50,8 @@ public sealed partial class MainWindow : Window
 #if DEBUG
     private long _navigationDebugVersion;
     private long _hotReloadRecoveryVersion;
+    private bool _isFirstDebugShow = true;
+    internal DebugWindowFocus DebugFocus { get; }
 #endif
 
     public MainWindow()
@@ -62,6 +65,10 @@ public sealed partial class MainWindow : Window
         _hiddenReleaseTimer.Tick += OnHiddenReleaseTimerTickAsync;
         InitializeComponent();
         ApplyPlatformWindowDecorations();
+#if DEBUG
+        DebugFocus = new DebugWindowFocus(this);
+        DebugFocus.SetMode(Program.LaunchWithoutFocus ? "no-focus" : "focus");
+#endif
         DataContextChanged += OnDataContextChanged;
         PropertyChanged += OnWindowPropertyChanged;
         Opened += OnOpened;
@@ -810,6 +817,14 @@ public sealed partial class MainWindow : Window
     public override void Show()
     {
         CancelPendingHide();
+#if DEBUG
+        if (_isFirstDebugShow)
+        {
+            _isFirstDebugShow = false;
+            DebugFocus.ShowInitial(base.Show);
+            return;
+        }
+#endif
         base.Show();
     }
 
@@ -924,6 +939,9 @@ public sealed partial class MainWindow : Window
 
         DetachViewModel();
         _windowStateService.Dispose();
+#if DEBUG
+        DebugFocus.Dispose();
+#endif
         DataContextChanged -= OnDataContextChanged;
         PropertyChanged -= OnWindowPropertyChanged;
         Opened -= OnOpened;
