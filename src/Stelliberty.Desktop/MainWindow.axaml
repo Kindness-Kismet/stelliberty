@@ -19,7 +19,8 @@
         TransparencyLevelHint="None"
         Background="{DynamicResource AppRootSurfaceBrush}"
         UseLayoutRounding="True"
-        Title="{Binding Title}">
+        Title="{Binding Title}"
+        Classes.sidebar-collapsed="{Binding Theme.IsSidebarCollapsed}">
   <Window.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
@@ -31,6 +32,7 @@
 
   <Window.Styles>
     <StyleInclude Source="avares://stelliberty/Styles/ShellStyles.axaml" />
+    <StyleInclude Source="avares://stelliberty/Styles/SidebarStyles.axaml" />
     <StyleInclude Source="avares://stelliberty/Styles/PrimitivesStyles.axaml" />
     <StyleInclude Source="avares://stelliberty/Styles/ScrollStyles.axaml" />
     <StyleInclude Source="avares://stelliberty/Styles/ListPageStyles.axaml" />
@@ -101,86 +103,115 @@
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1" ColumnDefinitions="220,*" ClipToBounds="True">
-      <Border AutomationProperties.AutomationId="Sidebar.Root"
-              Classes="sidebar-shadow"
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" ClipToBounds="True">
+      <Border x:Name="SidebarRoot"
+              AutomationProperties.AutomationId="Sidebar.Root"
+              Classes="sidebar-shadow sidebar-width"
               Padding="12,24,12,20"
               Background="Transparent">
-        <Grid RowDefinitions="Auto,*,Auto">
-          <TextBlock AutomationProperties.AutomationId="Sidebar.BrandText"
-                     Margin="0,4,0,28"
-                     Text="{Binding Title}"
-                     FontSize="20"
-                     FontWeight="SemiBold"
-                     HorizontalAlignment="Center"
-                     Foreground="{DynamicResource AppAccentBrush}" />
+        <Grid RowDefinitions="Auto,*,Auto" ClipToBounds="True">
+          <Border MinHeight="36" Margin="0,4,0,28">
+            <!-- 固定 220 − 2 × 12 = 196px 品牌宽度，避免收放改变锚点。 -->
+            <Grid Width="196" HorizontalAlignment="Left">
+              <Grid Classes="sidebar-brand" MinHeight="36" HorizontalAlignment="Center">
+                <TextBlock AutomationProperties.AutomationId="Sidebar.BrandText"
+                           Text="{Binding Title}"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource AppAccentBrush}" />
+              </Grid>
+              <Viewbox Classes="sidebar-app-icon"
+                       Width="36" Height="36"
+                       HorizontalAlignment="Left" Margin="8,0,0,0"
+                       Stretch="Uniform" IsHitTestVisible="False">
+                <Image Source="avares://stelliberty/Assets/linux/app_icon.png"
+                       AutomationProperties.AutomationId="Sidebar.AppIcon" />
+              </Viewbox>
+            </Grid>
+          </Border>
 
           <StackPanel Grid.Row="1" Spacing="6">
-            <Button Classes="nav-item"
-                    Classes.selected="{Binding IsHomeSelected}"
+            <Button Classes="nav-item" Classes.selected="{Binding IsHomeSelected}"
                     AutomationProperties.AutomationId="Navigation.HomeButton"
+                    AutomationProperties.Name="{Binding HomeNavText}"
+                    ToolTip.Tip="{Binding HomeNavText}"
                     Command="{Binding ShowHomeCommand}">
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-home" /></Border><TextBlock Text="{Binding HomeNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-home" /></Border>
+                <TextBlock Text="{Binding HomeNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.HomeLabel" />
               </StackPanel>
             </Button>
-            <Button Classes="nav-item"
-                    Classes.selected="{Binding IsProxySelected}"
+            <Button Classes="nav-item" Classes.selected="{Binding IsProxySelected}"
                     AutomationProperties.AutomationId="Navigation.ProxyButton"
+                    AutomationProperties.Name="{Binding ProxyNavText}"
+                    ToolTip.Tip="{Binding ProxyNavText}"
                     Command="{Binding ShowProxyCommand}">
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-proxy" /></Border><TextBlock Text="{Binding ProxyNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-proxy" /></Border>
+                <TextBlock Text="{Binding ProxyNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.ProxyLabel" />
               </StackPanel>
             </Button>
-            <Button Classes="nav-item"
-                    Classes.selected="{Binding IsConnectionsSelected}"
+            <Button Classes="nav-item" Classes.selected="{Binding IsConnectionsSelected}"
                     AutomationProperties.AutomationId="Navigation.ConnectionsButton"
+                    AutomationProperties.Name="{Binding ConnectionsNavText}"
+                    ToolTip.Tip="{Binding ConnectionsNavText}"
                     Command="{Binding ShowConnectionsCommand}">
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-connections" /></Border><TextBlock Text="{Binding ConnectionsNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-connections" /></Border>
+                <TextBlock Text="{Binding ConnectionsNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.ConnectionsLabel" />
               </StackPanel>
             </Button>
-            <Button Classes="nav-item"
-                    Classes.selected="{Binding IsCoreLogsSelected}"
+            <Button Classes="nav-item" Classes.selected="{Binding IsCoreLogsSelected}"
                     AutomationProperties.AutomationId="Navigation.CoreLogsButton"
+                    AutomationProperties.Name="{Binding CoreLogsNavText}"
+                    ToolTip.Tip="{Binding CoreLogsNavText}"
                     Command="{Binding ShowCoreLogsCommand}">
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-log" /></Border><TextBlock Text="{Binding CoreLogsNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-log" /></Border>
+                <TextBlock Text="{Binding CoreLogsNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.CoreLogsLabel" />
               </StackPanel>
             </Button>
-            <Button Classes="nav-item"
-                    Classes.selected="{Binding IsRulesSelected}"
+            <Button Classes="nav-item" Classes.selected="{Binding IsRulesSelected}"
                     AutomationProperties.AutomationId="Navigation.RulesButton"
+                    AutomationProperties.Name="{Binding RulesNavText}"
+                    ToolTip.Tip="{Binding RulesNavText}"
                     Command="{Binding ShowRulesCommand}">
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-rules" /></Border><TextBlock Text="{Binding RulesNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-rules" /></Border>
+                <TextBlock Text="{Binding RulesNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.RulesLabel" />
               </StackPanel>
             </Button>
-            <Button Classes="nav-item"
-                    Classes.selected="{Binding IsSubscriptionsSelected}"
+            <Button Classes="nav-item" Classes.selected="{Binding IsSubscriptionsSelected}"
                     AutomationProperties.AutomationId="Navigation.SubscriptionsButton"
+                    AutomationProperties.Name="{Binding SubscriptionsNavText}"
+                    ToolTip.Tip="{Binding SubscriptionsNavText}"
                     Command="{Binding ShowSubscriptionsCommand}">
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-subscription" /></Border><TextBlock Text="{Binding SubscriptionsNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-subscription" /></Border>
+                <TextBlock Text="{Binding SubscriptionsNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.SubscriptionsLabel" />
               </StackPanel>
             </Button>
-            <Button Classes="nav-item"
-                    Classes.selected="{Binding IsOverridesSelected}"
+            <Button Classes="nav-item" Classes.selected="{Binding IsOverridesSelected}"
                     AutomationProperties.AutomationId="Navigation.OverridesButton"
+                    AutomationProperties.Name="{Binding OverridesNavText}"
+                    ToolTip.Tip="{Binding OverridesNavText}"
                     Command="{Binding ShowOverridesCommand}">
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-overrides" /></Border><TextBlock Text="{Binding OverridesNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+                <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-overrides" /></Border>
+                <TextBlock Text="{Binding OverridesNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.OverridesLabel" />
               </StackPanel>
             </Button>
           </StackPanel>
 
-          <Button Grid.Row="2"
-                  Classes="nav-item"
-                  Classes.selected="{Binding IsSettingsSelected}"
+          <Button Grid.Row="2" Classes="nav-item" Classes.selected="{Binding IsSettingsSelected}"
                   AutomationProperties.AutomationId="Navigation.SettingsButton"
+                  AutomationProperties.Name="{Binding SettingsNavText}"
+                  ToolTip.Tip="{Binding SettingsNavText}"
                   Command="{Binding ShowSettingsCommand}">
             <StackPanel Orientation="Horizontal" Spacing="10">
-              <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-settings" /></Border><TextBlock Text="{Binding SettingsNavText}" Classes="nav-label" VerticalAlignment="Center" FontSize="14" />
+              <Border Classes="nav-icon-pill"><iconPacks:PackIconMingCuteIcons Classes="icon nav-icon nav-icon-settings" /></Border>
+              <TextBlock Text="{Binding SettingsNavText}" Classes="nav-label" AutomationProperties.AutomationId="Navigation.SettingsLabel" />
             </StackPanel>
           </Button>
         </Grid>

@@ -482,6 +482,8 @@
   "Settings.Field.Theme": "主题",
   "Settings.Field.Accent": "主题颜色",
   "Settings.Field.WindowEffect": "窗口效果",
+  "Settings.Field.NarrowSidebar": "窄侧边栏",
+  "Settings.Sidebar.Narrow.Description": "仅显示导航图标，悬停时显示页面名称",
   "Settings.Field.Language": "语言设置",
   "Settings.ClashFeature.Network": "网络设置",
   "Settings.ClashFeature.PortControl": "端口控制",

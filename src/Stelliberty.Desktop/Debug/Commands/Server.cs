@@ -145,6 +145,11 @@ internal static partial class DebugCommands
             return ExecuteNavigationCommandAsync(window, command);
         }
 
+        if (command.StartsWith("control.transition ", StringComparison.OrdinalIgnoreCase))
+        {
+            return TraceControlTransitionAsync(window, command["control.transition ".Length..]);
+        }
+
         if (command.StartsWith("control.", StringComparison.OrdinalIgnoreCase)
             || command.StartsWith("dropdown.", StringComparison.OrdinalIgnoreCase))
         {
