@@ -1,0 +1,6 @@
+# 技能源与镜像统一使用 LF，保持跨平台检出的字节一致。
+.codex/skills/** text eol=lf
+.claude/skills/** text eol=lf
+.pi/settings.json text eol=lf
+AGENTS.md text eol=lf
+CLAUDE.md text eol=lf
