@@ -2,6 +2,7 @@
 *
 
 !/.gitignore
+!/.gitattributes
 !/README.md
 !/LICENSE
 !/Cargo.toml
@@ -11,6 +12,22 @@
 !/Stelliberty.slnx
 !/.editorconfig
 !/NuGet.config
+!/AGENTS.md
+!/CLAUDE.md
+
+# 主源、镜像按技能源类型共享，Pi 只收纳 settings.json。
+!/.codex/
+!/.codex/skills/
+!/.codex/skills/**/
+!/.codex/skills/**/*.md
+!/.codex/skills/**/*.py
+!/.claude/
+!/.claude/skills/
+!/.claude/skills/**/
+!/.claude/skills/**/*.md
+!/.claude/skills/**/*.py
+!/.pi/
+!/.pi/settings.json
 
 !/.github/
 !/.github/CHANGELOG.md
@@ -97,12 +114,8 @@ google-services.json
 *.bak
 *.bak.*
 
-# 项目规范与助手技能采用本地策略。
-/AGENTS.md
-/CLAUDE.md
-/.claude/
+# 其他助手的本地配置保持私人属性。
 /.gemini/
-/.codex/
 /.cursor/
 /.continue/
 /.cline/

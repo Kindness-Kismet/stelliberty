@@ -17,6 +17,7 @@ public sealed class SettingsThemeViewModel : ViewModelBase, IDisposable
     private AccentColorMode _accentColorMode;
     private WindowEffect _windowEffect;
     private string _customAccentColor;
+    private bool _isSidebarCollapsed;
 
     public SettingsThemeViewModel(AppSettings settings, IAppSettingsStore settingsStore, ILocalizationService localization, IWindowEffectCapability? windowEffectCapability = null)
     {
@@ -28,6 +29,7 @@ public sealed class SettingsThemeViewModel : ViewModelBase, IDisposable
         _accentColorMode = ParseEnum(settings.AccentColorMode, AccentColorMode.System);
         _windowEffect = NormalizeWindowEffect(ParseEnum(settings.WindowEffect, WindowEffect.None));
         _customAccentColor = string.IsNullOrWhiteSpace(settings.AccentColor) ? "#3B82F6" : settings.AccentColor;
+        _isSidebarCollapsed = settings.IsSidebarCollapsed;
         settings.AccentColorMode = _accentColorMode.ToString();
         NormalizePersistedWindowEffect();
         _localization.LanguageChanged += OnLanguageChanged;
@@ -47,6 +49,25 @@ public sealed class SettingsThemeViewModel : ViewModelBase, IDisposable
     public string AccentColorSectionTitle => _localization.GetString("Settings.Field.Accent");
 
     public string WindowEffectSectionTitle => _localization.GetString("Settings.Field.WindowEffect");
+
+    public string NarrowSidebarTitle => _localization.GetString("Settings.Field.NarrowSidebar");
+
+    public string NarrowSidebarDescription => _localization.GetString("Settings.Sidebar.Narrow.Description");
+
+    public bool IsSidebarCollapsed
+    {
+        get => _isSidebarCollapsed;
+        set
+        {
+            if (!SetProperty(ref _isSidebarCollapsed, value))
+            {
+                return;
+            }
+
+            _settings.IsSidebarCollapsed = value;
+            _settingsStore.Save(_settings);
+        }
+    }
 
     public IReadOnlyList<SelectionOption<AppTheme>> Options =>
     [
@@ -158,6 +179,7 @@ public sealed class SettingsThemeViewModel : ViewModelBase, IDisposable
         _accentColorMode = ParseEnum(_settings.AccentColorMode, AccentColorMode.System);
         _windowEffect = NormalizeWindowEffect(ParseEnum(_settings.WindowEffect, WindowEffect.None));
         _customAccentColor = string.IsNullOrWhiteSpace(_settings.AccentColor) ? "#3B82F6" : _settings.AccentColor;
+        _isSidebarCollapsed = _settings.IsSidebarCollapsed;
         _settings.AccentColorMode = _accentColorMode.ToString();
         NormalizePersistedWindowEffect();
         OnPropertyChanged(string.Empty);
@@ -224,6 +246,8 @@ public sealed class SettingsThemeViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(FieldLabelText));
         OnPropertyChanged(nameof(AccentColorSectionTitle));
         OnPropertyChanged(nameof(WindowEffectSectionTitle));
+        OnPropertyChanged(nameof(NarrowSidebarTitle));
+        OnPropertyChanged(nameof(NarrowSidebarDescription));
         OnPropertyChanged(nameof(Options));
         OnPropertyChanged(nameof(SelectedOption));
         OnPropertyChanged(nameof(AccentModeOptions));

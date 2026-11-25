@@ -482,6 +482,8 @@
   "Settings.Field.Theme": "Theme",
   "Settings.Field.Accent": "Accent Color",
   "Settings.Field.WindowEffect": "Window Effect",
+  "Settings.Field.NarrowSidebar": "Narrow Sidebar",
+  "Settings.Sidebar.Narrow.Description": "Show navigation icons only, with page names on hover",
   "Settings.Field.Language": "Language",
   "Settings.ClashFeature.Network": "Network",
   "Settings.ClashFeature.PortControl": "Port Control",

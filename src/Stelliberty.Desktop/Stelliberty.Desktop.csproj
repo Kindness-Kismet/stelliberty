@@ -39,13 +39,15 @@
   <ItemGroup>
     <AvaloniaResource Include="Assets\fonts\GoogleSans-Regular.ttf" />
     <AvaloniaResource Include="Assets\fonts\NotoSansSC-Thin.ttf" />
+    <!-- 侧栏复用现有 PNG，所有桌面平台共用同一资源 URI。 -->
+    <AvaloniaResource Include="Assets\linux\app_icon.png" />
   </ItemGroup>
 
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
     <AvaloniaResource Include="Assets\win\**" />
   </ItemGroup>
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
-    <AvaloniaResource Include="Assets\linux\**" />
+    <AvaloniaResource Include="Assets\linux\**" Exclude="Assets\linux\app_icon.png" />
   </ItemGroup>
   <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
     <AvaloniaResource Include="Assets\macos\**" />

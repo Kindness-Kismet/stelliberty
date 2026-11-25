@@ -14,7 +14,7 @@ internal static partial class DebugCommands
 {
     private static void ActivateControl(MainWindow window, Control control)
     {
-        window.Activate();
+        if (!window.DebugFocus.IsNoFocus) window.Activate();
         control.Focus();
     }
 
