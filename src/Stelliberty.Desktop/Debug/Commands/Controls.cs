@@ -52,6 +52,12 @@ internal static partial class DebugCommands
             return null;
         }
 
+        if (command.StartsWith("control.measure ", StringComparison.OrdinalIgnoreCase))
+        {
+            var control = FindControlByAutomationId(window, command["control.measure ".Length..].Trim());
+            return JsonSerializer.Serialize(CaptureControlMotion(window, control, System.Diagnostics.Stopwatch.GetTimestamp()));
+        }
+
         if (command.StartsWith("control.get text ", StringComparison.OrdinalIgnoreCase))
         {
             return ReadControlText(window, command["control.get text ".Length..].Trim());

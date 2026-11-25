@@ -1,20 +1,56 @@
+# 默认忽略；目录只允许遍历，文件按实际用途和类型放行。
 *
-!*/
 
 !/.gitignore
+!/.gitattributes
 !/README.md
 !/LICENSE
 !/Cargo.toml
 !/Cargo.lock
 !/Directory.Build.props
 !/Directory.Build.targets
-!/*.sln
-!/*.slnx
-!/*.editorconfig
+!/Stelliberty.slnx
+!/.editorconfig
 !/NuGet.config
+!/AGENTS.md
+!/CLAUDE.md
+
+# 主源、镜像按技能源类型共享，Pi 只收纳 settings.json。
+!/.codex/
+!/.codex/skills/
+!/.codex/skills/**/
+!/.codex/skills/**/*.md
+!/.codex/skills/**/*.py
+!/.claude/
+!/.claude/skills/
+!/.claude/skills/**/
+!/.claude/skills/**/*.md
+!/.claude/skills/**/*.py
+!/.pi/
+!/.pi/settings.json
 
 !/.github/
-!/.github/**
+!/.github/CHANGELOG.md
+!/.github/dependabot.yml
+!/.github/pull_request_template.md
+!/.github/docs/
+!/.github/docs/README.zh-CN.md
+!/.github/ISSUE_TEMPLATE/
+!/.github/ISSUE_TEMPLATE/bug_report.md
+!/.github/ISSUE_TEMPLATE/feature_request.md
+!/.github/ISSUE_TEMPLATE/help.md
+!/.github/images/
+!/.github/images/*.png
+!/.github/scripts/
+!/.github/scripts/post_build_tests.py
+!/.github/scripts/retry_command.py
+!/.github/workflows/
+!/.github/workflows/build-beta.yml
+!/.github/workflows/build-release.yml
+!/.github/workflows/code-quality.yml
+!/.github/workflows/parallel-trigger.yml
+!/.github/workflows/pull-request-policy.yml
+!/.github/workflows/stability-verification.yml
 
 !/src/
 !/src/**/
@@ -22,33 +58,36 @@
 !/src/**/*.csproj
 !/src/**/*.axaml
 !/src/**/*.resx
-!/src/**/*.json
+!/src/Stelliberty.Infrastructure/Localization/Assets/*.json
+!/src/Stelliberty.Desktop/Assets/macos/app_icon.icon/icon.json
 !/src/**/*.props
 !/src/**/*.targets
 !/src/**/*.ico
 !/src/**/*.png
 !/src/**/*.icns
+!/src/Stelliberty.Desktop/Assets/**/*.svg
 
 !/native/
 !/native/**/
 !/native/**/*.rs
-!/native/**/*.toml
+!/native/**/Cargo.toml
 
 !/scripts/
 !/scripts/**/
-!/scripts/**/*.py
-!/scripts/**/*.in
-!/scripts/**/*.isl
-!/scripts/**/*.yaml
-!/scripts/**/*.yml
-!/scripts/**/*.js
-!/scripts/**/*.txt
+!/scripts/prebuild.py
+!/scripts/build.py
+!/scripts/test.py
+!/scripts/requirements-build.txt
+!/scripts/build_support/**/*.py
+!/scripts/installer/**/*.in
+!/scripts/installer/windows/languages/*.isl
 
 !/tests/
 !/tests/**/
 !/tests/**/*.cs
 !/tests/**/*.csproj
 
+# 生成物和私人配置在放行规则之后排除。
 /build/
 **/target/
 **/bin/
@@ -63,12 +102,20 @@
 **/.vs/
 **/.idea/
 **/.vscode/
-/.env
-/AGENTS.md
-/CLAUDE.md
-/.claude/
+.env*
+local.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+*.pem
+google-services.json
+*.bak
+*.bak.*
+
+# 其他助手的本地配置保持私人属性。
 /.gemini/
-/.codex/
 /.cursor/
 /.continue/
 /.cline/

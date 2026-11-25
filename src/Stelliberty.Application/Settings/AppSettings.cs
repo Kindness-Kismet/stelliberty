@@ -30,6 +30,8 @@ public sealed class AppSettings
 
     public bool IsWindowMaximized { get; set; }
 
+    public bool IsSidebarCollapsed { get; set; }
+
     public bool IsSilentStartEnabled { get; set; }
 
     public bool IsMinimizeToTrayEnabled { get; set; }

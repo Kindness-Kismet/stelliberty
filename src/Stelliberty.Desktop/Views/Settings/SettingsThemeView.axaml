@@ -80,6 +80,24 @@
           </ComboBox>
         </Grid>
       </Border>
+      <Border Classes="settings-row-divider" />
+      <Border Classes="settings-inline-row">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+          <StackPanel Grid.Column="0" Spacing="3">
+            <TextBlock Classes="settings-row-title"
+                       AutomationProperties.AutomationId="Settings.NarrowSidebarTitleText"
+                       Text="{Binding Theme.NarrowSidebarTitle}" />
+            <TextBlock Classes="settings-row-subtitle"
+                       AutomationProperties.AutomationId="Settings.NarrowSidebarDescriptionText"
+                       Text="{Binding Theme.NarrowSidebarDescription}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <ToggleSwitch Grid.Column="1"
+                        AutomationProperties.AutomationId="Settings.NarrowSidebarSwitch"
+                        AutomationProperties.Name="{Binding Theme.NarrowSidebarTitle}"
+                        IsChecked="{Binding Theme.IsSidebarCollapsed, Mode=TwoWay}" />
+        </Grid>
+      </Border>
     </StackPanel>
   </Border>
 </StackPanel>

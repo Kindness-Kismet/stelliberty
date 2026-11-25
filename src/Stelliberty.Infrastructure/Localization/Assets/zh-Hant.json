@@ -482,6 +482,8 @@
   "Settings.Field.Theme": "主題",
   "Settings.Field.Accent": "主題顏色",
   "Settings.Field.WindowEffect": "視窗效果",
+  "Settings.Field.NarrowSidebar": "窄側邊欄",
+  "Settings.Sidebar.Narrow.Description": "僅顯示導覽圖示，懸停時顯示頁面名稱",
   "Settings.Field.Language": "語言設定",
   "Settings.ClashFeature.Network": "網路設定",
   "Settings.ClashFeature.PortControl": "連接埠控制",

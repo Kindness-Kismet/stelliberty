@@ -1,12 +1,16 @@
 import json
 import os
 import shlex
+import signal
+import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
+from shutil import which as shutil_which
 
 from build_support.models import AppMetadata
-from build_support.paths import BUILD_DIR, DEPS_DIRECTORY, ROOT
+from build_support.paths import BUILD_DIR, DEPS_DIRECTORY
 
 
 def close_running_output_app(metadata: AppMetadata, output_dir: Path) -> None:
@@ -27,15 +31,8 @@ def close_running_output_app(metadata: AppMetadata, output_dir: Path) -> None:
     if not process_ids:
         return
 
-    skill_paths = [ROOT / directory / "skills" / "app-debug" / "scripts" / "cli.py" for directory in (".codex", ".claude")]
-    cli_path = next((path for path in skill_paths if path.is_file()), None)
-    if cli_path is None:
-        raise RuntimeError(f"Close the running output app before building; app-debug is unavailable: {resolved_output}")
-
-    print(f"  Stopping output app through app-debug: {resolved_output}", flush=True)
-    env = os.environ.copy()
-    env["STELLIBERTY_DEBUG_ROOT"] = str(ROOT)
-    subprocess.run([sys.executable, str(cli_path), "app.stop", "--output-dir", str(resolved_output)], cwd=ROOT, env=env, check=True)
+    print(f"  Stopping exact output app: {resolved_output}", flush=True)
+    stop_running_paths(set(binary_paths))
 
 
 def output_binary_path(binary_name: str, output_dir: Path) -> Path:
@@ -69,19 +66,23 @@ def running_process_ids_windows(binary_path: Path) -> list[int]:
         "| Select-Object ProcessId, ExecutablePath; "
         "$items | ConvertTo-Json -Compress",
     ]
-    # 进程路径按控制台代码页解码，严格模式遇到非法字节会让 stdout 变 None 并崩在 strip 上。
-    result = subprocess.run(command, text=True, errors="replace", capture_output=True, check=False)
+    command[-1] = "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); " + command[-1]
+    result = subprocess.run(command, text=True, encoding="utf-8", errors="replace", capture_output=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
     text = result.stdout.strip()
     if not text:
         return []
 
     try:
         records = json.loads(text)
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Process enumeration returned invalid JSON.") from error
 
+    if records is None:
+        return []
     if isinstance(records, dict):
         records = [records]
+    if not isinstance(records, list):
+        raise RuntimeError("Process enumeration returned an invalid record collection.")
 
     process_ids: list[int] = []
     expected = normalized_path(binary_path)
@@ -142,3 +143,84 @@ def running_process_ids_ps(binary_path: Path) -> list[int]:
 def normalized_path(path: Path) -> str:
     resolved = str(path.resolve())
     return resolved.casefold() if sys.platform == "win32" else resolved
+
+
+def process_binary_path(pid: int) -> Path | None:
+    if sys.platform == "win32":
+        script = "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); " + f"(Get-Process -Id {pid} -ErrorAction SilentlyContinue).Path"
+        result = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True,
+                                encoding="utf-8", errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
+        value = result.stdout.strip()
+        return Path(value) if value else None
+    process_path = Path(f"/proc/{pid}/exe")
+    if process_path.exists():
+        return Path(os.readlink(process_path))
+    result = subprocess.run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True, errors="replace")
+    values = shlex.split(result.stdout.strip())
+    return Path(values[0]) if values and Path(values[0]).is_absolute() else None
+
+
+def listening_process_ids(port: int) -> list[int]:
+    if sys.platform == "win32":
+        script = f"Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | ForEach-Object {{ $_.OwningProcess }} | Sort-Object -Unique"
+        result = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True,
+                                errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
+        return [int(line) for line in result.stdout.splitlines() if line.strip().isdigit()]
+    if shutil_which("lsof"):
+        result = subprocess.run(["lsof", "-nP", f"-iTCP@127.0.0.1:{port}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True)
+        return [int(line) for line in result.stdout.splitlines() if line.strip().isdigit()]
+    if shutil_which("ss"):
+        result = subprocess.run(["ss", "-ltnp"], capture_output=True, text=True)
+        import re
+
+        pattern = re.compile(rf"127\.0\.0\.1:{port}\b.*pid=(\d+)")
+        return [int(match[1]) for line in result.stdout.splitlines() if (match := pattern.search(line))]
+    raise RuntimeError("Install lsof or ss to identify the loopback Debug port owner.")
+
+
+def terminate_exact_process(pid: int, path: Path) -> None:
+    # 结束前复核可执行路径，避免 PID 复用触及其他应用。
+    actual = process_binary_path(pid)
+    if actual is None:
+        return
+    if normalized_path(actual) != normalized_path(path):
+        raise RuntimeError(f"PID {pid} changed executable identity; refusing to stop it.")
+    if sys.platform != "win32":
+        os.kill(pid, signal.SIGKILL)
+        return
+    result = subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True,
+                            text=True, errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
+    if result.returncode and pid in running_process_ids(path):
+        raise RuntimeError(f"Stopping output PID {pid} failed (exit code {result.returncode}).")
+
+
+def stop_running_paths(binary_paths: set[Path], port: int = 20000) -> None:
+    expected = {path.resolve() for path in binary_paths}
+    targets = {pid for path in expected for pid in running_process_ids(path)}
+    if not targets:
+        return
+    if targets.intersection(listening_process_ids(port)):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=10) as client:
+                client.sendall(b"app.quit\n")
+                with client.makefile("rb") as response:
+                    data = response.read()
+            if data.startswith(b"ERR"):
+                raise RuntimeError("The target app rejected the shutdown request.")
+        except (OSError, RuntimeError) as error:
+            detail = str(error) if isinstance(error, RuntimeError) else f"{type(error).__name__}; errno={error.errno}"
+            print(f"  warning: Normal output-app shutdown failed ({detail}).", file=sys.stderr)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if not any(running_process_ids(path) for path in expected):
+                return
+            time.sleep(0.1)
+    for path in expected:
+        for pid in running_process_ids(path):
+            terminate_exact_process(pid, path)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if not any(running_process_ids(path) for path in expected):
+            return
+        time.sleep(0.1)
+    raise TimeoutError("The exact output app did not exit within the shutdown budget.")

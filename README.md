@@ -318,13 +318,19 @@ Before submitting a Pull Request, confirm the following:
 
 ### Requirements
 
-Pull Requests must target `beta`. Direct Pull Requests to `stable` are prohibited; only the repository owner may promote the repository's `beta` branch to `stable`.
+Pull Requests must target `beta`. Only the repository owner may promote this repository's `beta` branch to `main`. The default branch is `main`; `.github/workflows/build-release.yml` publishes stable releases from it.
+
+Use English titles and bodies based on the final PR diff. Titles follow `type(scope): summary`, or `type: summary` for one goal spanning modules. Use an imperative summary without a trailing period, preferably within 72 characters. Types are `feat`, `fix`, `refactor`, `perf`, `ui`, `docs`, `style`, `test`, `build`, `ci`, `chore`, and `revert`.
+
+Release preparation uses `chore(release): prepare v<version>` and states the base version → target version in the opening paragraph. Describe the actual source repository/head → target repository/base, final behavior, and relevant validation results. Use closing issue keywords only when the entire issue is resolved. Keep private paths, credentials, and local work logs out of public text and attachments.
+
+Each commit should complete one logical goal, including its related implementation, configuration, and documentation. Independent goals use separate commits. Local commit and PR workflows are maintained in the `commit` and `pull-request` skills.
 
 | Check | Description |
 |---|---|
-| Debug commands | Maintain application and UI commands under `src/Stelliberty.Desktop/Debug` |
+| Debug commands | Keep affected application and UI commands under `src/Stelliberty.Desktop/Debug` in sync |
 | Control IDs | New interactive controls must have `AutomationProperties.AutomationId` set |
-| Test coverage | Pure business logic uses `Pre-build Tests`; packaged app behavior uses `Post-build Tests` |
+| Validation | Run relevant builds, existing tests, or app debugging and report actual results; add or change test code only when explicitly requested |
 | Formatting | C#: `dotnet format`, Rust: `cargo fmt` |
 
 ### Debug Command Requirements

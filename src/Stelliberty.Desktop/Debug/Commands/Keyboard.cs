@@ -32,7 +32,7 @@ internal static partial class DebugCommands
 
         var key = ParseKey(tokens[^1]);
         var target = window.FocusManager?.GetFocusedElement() as InputElement ?? window;
-        window.Activate();
+        if (!window.DebugFocus.IsNoFocus) window.Activate();
         target.RaiseEvent(new KeyEventArgs
         {
             RoutedEvent = InputElement.KeyDownEvent,

@@ -21,6 +21,7 @@ internal static partial class DebugCommands
             || string.Equals(command, "clipboard.read", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "toast.state", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.memory", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "app.status", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.power-state", StringComparison.OrdinalIgnoreCase)
             || command.StartsWith("app.power-event ", StringComparison.OrdinalIgnoreCase)
             || string.Equals(command, "app.quit", StringComparison.OrdinalIgnoreCase)
@@ -108,32 +109,27 @@ internal static partial class DebugCommands
             return null;
         }
 
-        if (string.Equals(command, "window.state", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(command, "window.state", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(command, "app.status", StringComparison.OrdinalIgnoreCase))
         {
             return WindowStateText(window);
         }
 
         if (string.Equals(command, "window.minimize", StringComparison.OrdinalIgnoreCase))
         {
-            window.WindowState = WindowState.Minimized;
+            window.DebugFocus.SetState(WindowState.Minimized);
             return WindowStateText(window);
         }
 
         if (string.Equals(command, "window.maximize", StringComparison.OrdinalIgnoreCase))
         {
-            window.WindowState = WindowState.Maximized;
+            window.DebugFocus.SetState(WindowState.Maximized);
             return WindowStateText(window);
         }
 
         if (string.Equals(command, "window.restore", StringComparison.OrdinalIgnoreCase))
         {
-            window.WindowState = WindowState.Normal;
-            // Windows 会先恢复最小化前的最大化状态，需同步原生状态后再还原。
-            if (OperatingSystem.IsWindows() && window.WindowState == WindowState.Maximized)
-            {
-                window.WindowState = WindowState.Maximized;
-                window.WindowState = WindowState.Normal;
-            }
+            window.DebugFocus.SetState(WindowState.Normal);
             return WindowStateText(window);
         }
 
@@ -157,13 +153,7 @@ internal static partial class DebugCommands
 
         if (string.Equals(command, "window.show", StringComparison.OrdinalIgnoreCase))
         {
-            var wasMinimized = window.WindowState == WindowState.Minimized;
-            window.Show();
-            if (wasMinimized)
-            {
-                window.WindowState = WindowState.Normal;
-            }
-            window.Activate();
+            window.DebugFocus.Show();
             return null;
         }
 
@@ -179,6 +169,7 @@ internal static partial class DebugCommands
             ';',
             $"visible={window.IsVisible.ToString().ToLowerInvariant()}",
             $"active={window.IsActive.ToString().ToLowerInvariant()}",
+            $"focus_mode={window.DebugFocus.Mode}",
             $"state={window.WindowState}",
             $"x={window.Position.X}",
             $"y={window.Position.Y}",
@@ -231,7 +222,7 @@ internal static partial class DebugCommands
             throw new InvalidOperationException("Window move arguments must be x y");
         }
 
-        window.Position = new PixelPoint(x, y);
+        window.DebugFocus.Move(x, y);
     }
 
     // 目标尺寸小于 MinWidth/MinHeight 时窗口停在下限，用于验证最小宽度下的布局。
@@ -242,15 +233,14 @@ internal static partial class DebugCommands
             || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
             || !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var height)
             || width <= 0
-            || height <= 0)
+            || height <= 0
+            || !double.IsFinite(width)
+            || !double.IsFinite(height))
         {
             throw new InvalidOperationException("Window resize arguments must be width height");
         }
 
-        window.WindowState = WindowState.Normal;
-        window.Width = width;
-        window.Height = height;
-        window.UpdateLayout();
+        window.DebugFocus.Resize(width, height);
     }
 }
 #endif

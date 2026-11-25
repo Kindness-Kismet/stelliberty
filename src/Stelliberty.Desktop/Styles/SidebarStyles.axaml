@@ -1,0 +1,74 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="Border.sidebar-width">
+    <Setter Property="Width" Value="220" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Width" Duration="0:0:0.3" Easing="CubicEaseInOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Window.sidebar-collapsed Border.sidebar-width">
+    <!-- 76 = 52px 正方形导航项 + 左右各 12px 外边距。 -->
+    <Setter Property="Width" Value="76" />
+  </Style>
+
+  <Style Selector="Viewbox.sidebar-app-icon">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="RenderTransform" Value="translateX(-44px)" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.3" Easing="CubicEaseInOut" />
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3" Easing="CubicEaseInOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Window.sidebar-collapsed Viewbox.sidebar-app-icon">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="RenderTransform" Value="translateX(0px)" />
+  </Style>
+  <Style Selector="Grid.sidebar-brand">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.3" Easing="CubicEaseInOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Window.sidebar-collapsed Grid.sidebar-brand">
+    <!-- 品牌高度保持不变，避免导航随收放上下跳动。 -->
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <Style Selector="Button.nav-item">
+    <Setter Property="ToolTip.ServiceEnabled" Value="False" />
+  </Style>
+  <Style Selector="Window.sidebar-collapsed Button.nav-item">
+    <Setter Property="ToolTip.ServiceEnabled" Value="True" />
+  </Style>
+  <Style Selector="Border.nav-icon-pill">
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin" Duration="0:0:0.3" Easing="CubicEaseInOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Window.sidebar-collapsed Border.nav-icon-pill">
+    <!-- 52px 按钮去掉 16px 内边距后，34px 图标盒左右各补 1px。 -->
+    <Setter Property="Margin" Value="1,0,0,0" />
+  </Style>
+  <Style Selector="TextBlock.nav-label">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.3" Easing="CubicEaseInOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <!-- 后声明的窄栏规则覆盖普通标签不透明度，保留文字淡出。 -->
+  <Style Selector="Window.sidebar-collapsed TextBlock.nav-label">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+</Styles>

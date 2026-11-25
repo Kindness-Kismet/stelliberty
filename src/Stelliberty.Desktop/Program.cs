@@ -10,16 +10,25 @@ internal static class Program
 {
     internal static bool ShowWindowOnStart { get; private set; }
     internal static SingleInstanceService? SingleInstance { get; private set; }
+#if DEBUG
+    internal static bool LaunchWithoutFocus { get; private set; }
+#endif
 
     [STAThread]
     public static int Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
         var isSilent = args.Contains("--silent-start", StringComparer.Ordinal);
+#if DEBUG
+        LaunchWithoutFocus = args.Contains("--no-focus", StringComparer.Ordinal);
+#endif
         using var singleInstance = new SingleInstanceService();
         if (!singleInstance.OwnsInstance)
         {
             // Avalonia 必须使用入口 STA 线程；同步等待仅限第二个进程的激活请求。
+#if DEBUG
+            if (LaunchWithoutFocus) return 0;
+#endif
             return isSilent ? 0 : SingleInstanceService.ActivateExistingAsync().GetAwaiter().GetResult();
         }
 
@@ -32,7 +41,11 @@ internal static class Program
         SingleInstance = singleInstance;
         try
         {
-            AppRuntime.Run(args.Where(argument => argument is not "--silent-start" and not "--show-ui").ToArray());
+            AppRuntime.Run(args.Where(argument => argument is not "--silent-start" and not "--show-ui"
+#if DEBUG
+                and not "--no-focus"
+#endif
+            ).ToArray());
             return 0;
         }
         finally

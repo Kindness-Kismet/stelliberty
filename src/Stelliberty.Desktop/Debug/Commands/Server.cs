@@ -72,6 +72,14 @@ internal static partial class DebugCommands
 
     private static Task<string?> ExecuteAsync(MainWindow window, string command)
     {
+        if (command.StartsWith("focus.mode ", StringComparison.Ordinal))
+        {
+            var parts = command.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3) throw new InvalidOperationException("Focus mode requires a mode and command");
+            window.DebugFocus.SetMode(parts[1]);
+            return ExecuteAsync(window, parts[2]);
+        }
+
         if (command.StartsWith("home.", StringComparison.OrdinalIgnoreCase))
         {
             return ExecuteHomeCommandAsync(window, command);
@@ -135,6 +143,11 @@ internal static partial class DebugCommands
         if (command.StartsWith("page.", StringComparison.OrdinalIgnoreCase))
         {
             return ExecuteNavigationCommandAsync(window, command);
+        }
+
+        if (command.StartsWith("control.transition ", StringComparison.OrdinalIgnoreCase))
+        {
+            return TraceControlTransitionAsync(window, command["control.transition ".Length..]);
         }
 
         if (command.StartsWith("control.", StringComparison.OrdinalIgnoreCase)

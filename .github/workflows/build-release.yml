@@ -1,4 +1,4 @@
-name: Stable Build
+name: Release Build
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
         type: string
   push:
     branches:
-      - stable
+      - main
     paths:
       - Directory.Build.props
 
@@ -28,12 +28,12 @@ env:
 
 jobs:
   validate-branch:
-    name: Validate stable branch
+    name: Validate main branch
     runs-on: ubuntu-22.04
     steps:
-      - name: Require stable branch
+      - name: Require main branch
         shell: bash
-        run: test "${{ github.ref }}" = 'refs/heads/stable'
+        run: test "${{ github.ref }}" = 'refs/heads/main'
 
   detect-version-change:
     name: Detect version change
@@ -394,9 +394,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Merged PRs retain their original base branch after a rename.
           gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/pulls?state=closed&base=stable&sort=updated&direction=desc&per_page=100" \
-            > stable-pulls.json
+            "repos/${GITHUB_REPOSITORY}/pulls?state=closed&sort=updated&direction=desc&per_page=100" \
+            > release-pulls.json
           pull_number=''
           source_sha=''
           while IFS=$'\t' read -r candidate_number merge_sha candidate_source_sha; do
@@ -411,7 +412,7 @@ jobs:
                 .[][]
                 | select(
                     .merged_at != null
-                    and .base.ref == "stable"
+                    and (.base.ref == "main" or .base.ref == "stable")
                     and .head.ref == "beta"
                     and .head.repo.full_name == $repository
                     and .merge_commit_sha != null
@@ -423,10 +424,10 @@ jobs:
               | .[]
               | [.number, .merge_commit_sha, .head.sha]
               | @tsv
-            ' stable-pulls.json
+            ' release-pulls.json
           )
           if [ -z "${source_sha}" ]; then
-            echo '::error::No merged beta to stable pull request is included in this release.'
+            echo '::error::No merged beta promotion pull request is included in this release.'
             exit 1
           fi
           printf 'pull_number=%s\nsource_sha=%s\n' "${pull_number}" "${source_sha}" | tee -a "$GITHUB_OUTPUT"

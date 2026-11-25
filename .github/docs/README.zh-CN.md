@@ -316,13 +316,19 @@ cargo fmt
 
 ### 必须项
 
-Pull Request 必须以 `beta` 为目标分支，禁止直接向 `stable` 发起；仅仓库所有者可以将本仓库的 `beta` 分支合并到 `stable`。
+Pull Request 必须以 `beta` 为目标分支；仅仓库所有者可以将本仓库的 `beta` 分支合并到 `main`。默认分支为 `main`，正式版由 `.github/workflows/build-release.yml` 从该分支发布。
+
+标题和正文使用英文，以 PR 最终差异为依据。标题采用 `type(scope): summary`；同一目标跨模块时可用 `type: summary`。摘要使用祈使句，末尾不加句号，标题建议不超过 72 个字符。类型为 `feat`、`fix`、`refactor`、`perf`、`ui`、`docs`、`style`、`test`、`build`、`ci`、`chore`、`revert`。
+
+发布准备使用 `chore(release): prepare v<version>`，正文开头说明基线版本 → 目标版本。写明实际来源仓库/head → 目标仓库/base、最终行为和相关验证结果；完整解决 issue 后才使用关闭关键词。公开文案和附件清理私人路径、凭据与本地过程记录。
+
+每个 commit 对应一个完整逻辑目标，关联实现、配置和文档一起提交，独立目标分别提交。本地提交和 PR 的具体流程由 `commit`、`pull-request` 技能维护。
 
 | 检查项 | 说明 |
 |---|---|
-| 调试指令 | 应用和界面指令统一维护在 `src/Stelliberty.Desktop/Debug` |
+| 调试指令 | 同步维护 `src/Stelliberty.Desktop/Debug` 中受影响的应用和界面指令 |
 | 控件 ID | 引入新的可交互控件时，必须设置 `AutomationProperties.AutomationId` |
-| 测试覆盖 | 纯业务逻辑使用编译前测试，安装包应用行为使用编译后测试 |
+| 验证 | 按改动运行构建、已有测试或应用调试，并说明实际结果；仅在明确要求时新增或修改测试代码 |
 | 格式化 | C# 运行 `dotnet format`，Rust 运行 `cargo fmt` |
 
 ### 调试指令要求
